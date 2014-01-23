@@ -13,10 +13,6 @@ int main()
     cl_device_id device_id = NULL;
     cl_context context = NULL;
     cl_command_queue command_queue = NULL;
-    cl_mem memobj0 = NULL;
-    cl_mem memobj1 = NULL;
-    cl_mem memobj2 = NULL;
-
     cl_program program = NULL;
     cl_kernel kernel = NULL;
     cl_platform_id platform_id = NULL;
@@ -24,9 +20,13 @@ int main()
     cl_uint ret_num_platforms;
     cl_int ret;
 
+    cl_mem memobj0 = NULL;
+    cl_mem memobj1 = NULL;
+    cl_mem memobj2 = NULL;
+
     FILE *fp;
-//    char fileName[] = "./serpent.cl";
-    char fileName[] = "./check.cl";
+    char fileName[] = "./serpent.cl";
+//    char fileName[] = "./check.cl";
     char *source_str;
     size_t source_size;
     size_t log_size;
@@ -71,10 +71,6 @@ int main()
     command_queue = clCreateCommandQueue(context, device_id, 0, &ret);
     assert(ret == CL_SUCCESS);
 
-/*
-__kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintext, uint32_t ciphertext[4])
-*/
-
     
 
     /* Create Memory Buffer */
@@ -82,29 +78,70 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
     fprintf(stderr, "[INFO] Creating memory buffer (for key)\n");
     memobj0 = clCreateBuffer(
         context,
-        CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, // Memory in R/W mode
+        CL_MEM_READ_WRITE, // Memory in R/W mode
         BLOCK_SIZE * sizeof(unsigned char),
-        key,
+        NULL,
         &ret);
     assert(ret == CL_SUCCESS);
 
     fprintf(stderr, "[INFO] Creating memory buffer (for plaintext)\n");
     memobj1 = clCreateBuffer(
         context,
-        CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, // Memory in R/W mode
+        CL_MEM_READ_WRITE, // Memory in R/W mode
         BLOCK_SIZE * sizeof(unsigned char),
-        plain,
+        NULL,
         &ret);
     assert(ret == CL_SUCCESS);
 
     fprintf(stderr, "[INFO] Creating memory buffer (for ciphertext)\n");
     memobj2 = clCreateBuffer(
         context,
-        CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, // Memory in R/W mode
+        CL_MEM_READ_WRITE, // Memory in R/W mode
         BLOCK_SIZE * sizeof(unsigned char),
-        cipher,
+        NULL,
         &ret);
     assert(ret == CL_SUCCESS);
+
+
+    fprintf(stderr, "[INFO] Copying into memory buffer (key)\n");
+    ret = clEnqueueWriteBuffer(
+        command_queue,
+        memobj0,
+        CL_TRUE,
+        0,
+        BLOCK_SIZE * sizeof(unsigned char),
+        key,
+        0,
+        NULL,
+        NULL);
+    assert(ret == CL_SUCCESS);
+
+    fprintf(stderr, "[INFO] Copying into memory buffer (plain)\n");
+    ret = clEnqueueWriteBuffer(
+        command_queue,
+        memobj1,
+        CL_TRUE,
+        0,
+        BLOCK_SIZE * sizeof(unsigned char),
+        plain,
+        0,
+        NULL,
+        NULL);
+    assert(ret == CL_SUCCESS);
+
+    fprintf(stderr, "[INFO] Copying into memory buffer (clean cipher)\n");
+    ret = clEnqueueWriteBuffer(
+        command_queue,
+        memobj2,
+        CL_TRUE,
+        0,
+        BLOCK_SIZE * sizeof(unsigned char),
+        cipher,
+        0,
+        NULL,
+        NULL);
+    assert(ret == CL_SUCCESS);
+
 
 
     /* Create Kernel Program from the source */
