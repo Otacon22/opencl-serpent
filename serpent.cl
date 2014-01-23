@@ -413,13 +413,15 @@ typedef unsigned int    uint32_t;
 #define keyLen 128 
 
 
-__kernel void serpent_encrypt(__global unsigned char *_key, __global unsigned char *_plaintext, __global unsigned char *_ciphertext)
+__kernel void serpent_encrypt(__global uint32_t *key, __global uint32_t *plaintext, __global uint32_t *ciphertext)
 {
     uint32_t t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18;
-
+    
+    /*
     uint32_t *key = (uint32_t *) _key; 
     uint32_t *plaintext = (uint32_t *) _plaintext; 
     uint32_t *ciphertext = (uint32_t *) _ciphertext;
+    */
 
     uint32_t x0, x1, x2, x3; //It was a register variable
     uint32_t y0, y1, y2, y3; //It was a register variable
@@ -429,7 +431,7 @@ __kernel void serpent_encrypt(__global unsigned char *_key, __global unsigned ch
   
     uint32_t subkeys[33][4];
     int rc;
-    
+
     i=0;
 
 #define INIT  w[i]=key[i]; i++
@@ -642,33 +644,10 @@ __kernel void serpent_encrypt(__global unsigned char *_key, __global unsigned ch
     keying(x0, x1, x2, x3, subkeys[32]);
   
 
-   _ciphertext[0]=0xFF000000 & x0;
-   _ciphertext[1]=0x00FF0000 & x0;
-   _ciphertext[2]=0x0000FF00 & x0;
-   _ciphertext[3]=0x000000FF & x0;
-
-   _ciphertext[4]=0xFF000000 & x1;
-   _ciphertext[5]=0x00FF0000 & x1;
-   _ciphertext[6]=0x0000FF00 & x1;
-   _ciphertext[7]=0x000000FF & x1;
-
-   _ciphertext[8]=0xFF000000 & x2;
-   _ciphertext[9]=0x00FF0000 & x2;
-   _ciphertext[10]=0x0000FF00 & x2;
-   _ciphertext[11]=0x000000FF & x2;
-
-   _ciphertext[12]=0xFF000000 & x3;
-   _ciphertext[13]=0x00FF0000 & x3;
-   _ciphertext[14]=0x0000FF00 & x3;
-   _ciphertext[15]=0x000000FF & x3;
-
-return;
-
-/* ORIGINAL CODE:
     ciphertext[0] = x0;
     ciphertext[1] = x1;
     ciphertext[2] = x2;
     ciphertext[3] = x3;
-*/
+
 
 }

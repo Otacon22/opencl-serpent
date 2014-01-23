@@ -6,7 +6,11 @@
 
 #define MAX_SOURCE_SIZE (0x100000)
 
+typedef unsigned int    uint32_t;
+
 #define BLOCK_SIZE 16
+
+#define MEM_SIZE  4*sizeof(uint32_t)
 
 int main()
 {
@@ -33,12 +37,25 @@ int main()
     char *build_log;
 
     unsigned char correct[BLOCK_SIZE] = {0xEA,0x02,0x47,0x14,0xAD,0x5C,0x4D,0x84,0xEA,0x02,0x47,0x14,0xAD,0x5C,0x4D,0x84};
-    unsigned char plain[BLOCK_SIZE] = {0xBE,0xB6,0xC0,0x69,0x39,0x38,0x22,0xD3,0xBE,0x73,0xFF,0x30,0x52,0x5E,0xC4,0x3E};
-    unsigned char key[BLOCK_SIZE] = {0x2B,0xD6,0x45,0x9F,0x82,0xC5,0xB3,0x00,0x95,0x2C,0x49,0x10,0x48,0x81,0xFF,0x48};
-    unsigned char cipher[BLOCK_SIZE] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
-    unsigned char cipher2[BLOCK_SIZE];
+    unsigned char _plain[BLOCK_SIZE] = {0xBE,0xB6,0xC0,0x69,0x39,0x38,0x22,0xD3,0xBE,0x73,0xFF,0x30,0x52,0x5E,0xC4,0x3E};
+    unsigned char _key[BLOCK_SIZE] = {0x2B,0xD6,0x45,0x9F,0x82,0xC5,0xB3,0x00,0x95,0x2C,0x49,0x10,0x48,0x81,0xFF,0x48};
+    unsigned char _cipher[BLOCK_SIZE] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+    unsigned char _cipher2[BLOCK_SIZE];
+
+    //uint32_t correct[4];
+    uint32_t plain[4];
+    uint32_t key[4];
+    uint32_t cipher[4];
+    uint32_t cipher2[4];
+
 
     int k;
+
+
+    memcpy(plain, _plain, 16);
+    memcpy(key, _key, 16);
+    memcpy(cipher, _cipher, 16);
+
 
     /* Load the source code containing the kernel */
     if (!(fp = fopen(fileName, "r"))) {
@@ -79,7 +96,7 @@ int main()
     memobj0 = clCreateBuffer(
         context,
         CL_MEM_READ_WRITE, // Memory in R/W mode
-        BLOCK_SIZE * sizeof(unsigned char),
+        MEM_SIZE,
         NULL,
         &ret);
     assert(ret == CL_SUCCESS);
@@ -88,7 +105,7 @@ int main()
     memobj1 = clCreateBuffer(
         context,
         CL_MEM_READ_WRITE, // Memory in R/W mode
-        BLOCK_SIZE * sizeof(unsigned char),
+        MEM_SIZE,
         NULL,
         &ret);
     assert(ret == CL_SUCCESS);
@@ -97,7 +114,7 @@ int main()
     memobj2 = clCreateBuffer(
         context,
         CL_MEM_READ_WRITE, // Memory in R/W mode
-        BLOCK_SIZE * sizeof(unsigned char),
+        MEM_SIZE,
         NULL,
         &ret);
     assert(ret == CL_SUCCESS);
@@ -109,7 +126,7 @@ int main()
         memobj0,
         CL_TRUE,
         0,
-        BLOCK_SIZE * sizeof(unsigned char),
+        MEM_SIZE,
         key,
         0,
         NULL,
@@ -122,7 +139,7 @@ int main()
         memobj1,
         CL_TRUE,
         0,
-        BLOCK_SIZE * sizeof(unsigned char),
+        MEM_SIZE,
         plain,
         0,
         NULL,
@@ -135,7 +152,7 @@ int main()
         memobj2,
         CL_TRUE,
         0,
-        BLOCK_SIZE * sizeof(unsigned char),
+        MEM_SIZE,
         cipher,
         0,
         NULL,
@@ -234,7 +251,7 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
         memobj2,
         CL_TRUE,
         0,
-        BLOCK_SIZE * sizeof(unsigned char),
+        MEM_SIZE,
         cipher2, //output pointer
         0,
         NULL,
