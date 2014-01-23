@@ -413,12 +413,12 @@ typedef unsigned int    uint32_t;
 #define keyLen 128 
 
 
-__kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintext, char *_output)
+__kernel void serpent_encrypt(__global char *string, __global unsigned char *_key, __global unsigned char *_plaintext, __global uint32_t ciphertext[4])
 {
     uint32_t t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18;
 
-    uint32_t *key = _key; 
-    uint32_t *plaintext = _plaintext; 
+    uint32_t *key = (uint32_t) _key; 
+    uint32_t *plaintext = (uint32_t) _plaintext; 
 
     uint32_t x0, x1, x2, x3; //It was a register variable
     uint32_t y0, y1, y2, y3; //It was a register variable
@@ -428,6 +428,10 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
   
     uint32_t subkeys[33][4];
     int rc;
+
+    //FIXME
+    return;
+   
 
     i=0;
 
