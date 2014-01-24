@@ -413,58 +413,158 @@ typedef unsigned int    uint32_t;
 #define keyLen 128 
 
 
-__kernel void serpent_encrypt(__global uint32_t *key, __global uint32_t *plaintext, __global uint32_t *ciphertext)
+__kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintext, __global uint32_t *ciphertext)
 {
-    uint32_t t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18;
+    __local uint32_t t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18;
     
-    /*
-    uint32_t *key = (uint32_t *) _key; 
-    uint32_t *plaintext = (uint32_t *) _plaintext; 
-    uint32_t *ciphertext = (uint32_t *) _ciphertext;
-    */
+    __local uint32_t x0, x1, x2, x3; 
+    __local uint32_t y0, y1, y2, y3;
 
-    uint32_t x0, x1, x2, x3; //It was a register variable
-    uint32_t y0, y1, y2, y3; //It was a register variable
-
-    uint32_t i,j;
-    uint32_t w[132],k[132];
+    __local uint32_t k[132];
+    __local uint32_t w[132];
   
-    uint32_t subkeys[33][4];
-    int rc;
+    __local uint32_t subkeys[33][4];
 
-    i=0;
+    /* Copying pre-processed key from global address space to local */
+    w[0] = _w[0];
+    w[1] = _w[1];
+    w[2] = _w[2];
+    w[3] = _w[3];
+    w[4] = _w[4];
+    w[5] = _w[5];
+    w[6] = _w[6];
+    w[7] = _w[7];
+    w[8] = _w[8];
+    w[9] = _w[9];
+    w[10] = _w[10];
+    w[11] = _w[11];
+    w[12] = _w[12];
+    w[13] = _w[13];
+    w[14] = _w[14];
+    w[15] = _w[15];
+    w[16] = _w[16];
+    w[17] = _w[17];
+    w[18] = _w[18];
+    w[19] = _w[19];
+    w[20] = _w[20];
+    w[21] = _w[21];
+    w[22] = _w[22];
+    w[23] = _w[23];
+    w[24] = _w[24];
+    w[25] = _w[25];
+    w[26] = _w[26];
+    w[27] = _w[27];
+    w[28] = _w[28];
+    w[29] = _w[29];
+    w[30] = _w[30];
+    w[31] = _w[31];
+    w[32] = _w[32];
+    w[33] = _w[33];
+    w[34] = _w[34];
+    w[35] = _w[35];
+    w[36] = _w[36];
+    w[37] = _w[37];
+    w[38] = _w[38];
+    w[39] = _w[39];
+    w[40] = _w[40];
+    w[41] = _w[41];
+    w[42] = _w[42];
+    w[43] = _w[43];
+    w[44] = _w[44];
+    w[45] = _w[45];
+    w[46] = _w[46];
+    w[47] = _w[47];
+    w[48] = _w[48];
+    w[49] = _w[49];
+    w[50] = _w[50];
+    w[51] = _w[51];
+    w[52] = _w[52];
+    w[53] = _w[53];
+    w[54] = _w[54];
+    w[55] = _w[55];
+    w[56] = _w[56];
+    w[57] = _w[57];
+    w[58] = _w[58];
+    w[59] = _w[59];
+    w[60] = _w[60];
+    w[61] = _w[61];
+    w[62] = _w[62];
+    w[63] = _w[63];
+    w[64] = _w[64];
+    w[65] = _w[65];
+    w[66] = _w[66];
+    w[67] = _w[67];
+    w[68] = _w[68];
+    w[69] = _w[69];
+    w[70] = _w[70];
+    w[71] = _w[71];
+    w[72] = _w[72];
+    w[73] = _w[73];
+    w[74] = _w[74];
+    w[75] = _w[75];
+    w[76] = _w[76];
+    w[77] = _w[77];
+    w[78] = _w[78];
+    w[79] = _w[79];
+    w[80] = _w[80];
+    w[81] = _w[81];
+    w[82] = _w[82];
+    w[83] = _w[83];
+    w[84] = _w[84];
+    w[85] = _w[85];
+    w[86] = _w[86];
+    w[87] = _w[87];
+    w[88] = _w[88];
+    w[89] = _w[89];
+    w[90] = _w[90];
+    w[91] = _w[91];
+    w[92] = _w[92];
+    w[93] = _w[93];
+    w[94] = _w[94];
+    w[95] = _w[95];
+    w[96] = _w[96];
+    w[97] = _w[97];
+    w[98] = _w[98];
+    w[99] = _w[99];
+    w[100] = _w[100];
+    w[101] = _w[101];
+    w[102] = _w[102];
+    w[103] = _w[103];
+    w[104] = _w[104];
+    w[105] = _w[105];
+    w[106] = _w[106];
+    w[107] = _w[107];
+    w[108] = _w[108];
+    w[109] = _w[109];
+    w[110] = _w[110];
+    w[111] = _w[111];
+    w[112] = _w[112];
+    w[113] = _w[113];
+    w[114] = _w[114];
+    w[115] = _w[115];
+    w[116] = _w[116];
+    w[117] = _w[117];
+    w[118] = _w[118];
+    w[119] = _w[119];
+    w[120] = _w[120];
+    w[121] = _w[121];
+    w[122] = _w[122];
+    w[123] = _w[123];
+    w[124] = _w[124];
+    w[125] = _w[125];
+    w[126] = _w[126];
+    w[127] = _w[127];
+    w[128] = _w[128];
+    w[129] = _w[129];
+    w[130] = _w[130];
+    w[131] = _w[131];
 
-#define INIT  w[i]=key[i]; i++
 
-    INIT;INIT;INIT;INIT;       
-    w[i]=(key[i]&((1L<<((keyLen&31)))-1))|(1L<<((keyLen&31)));
-    i++;
-
-#define SETZERO  w[i]=0;i++
-
-    SETZERO; SETZERO;SETZERO; SETZERO;
-    i=8;
-
-#define ITER_1    w[i]=ROL(w[i-8]^w[i-5]^w[i-3]^w[i-1]^PHI^(i-8),11);i++
-
-    ITER_1;ITER_1;ITER_1;ITER_1;ITER_1;ITER_1;ITER_1;ITER_1;
-
-#define ITER_2    w[i]=w[i+8];i++    
-
-    i=0;
-    ITER_2;ITER_2;ITER_2;ITER_2;ITER_2;ITER_2;ITER_2;ITER_2;
-    i=8;
-
-#define ITER_3    w[i]=ROL(w[i-8]^w[i-5]^w[i-3]^w[i-1]^PHI^i,11); i++
-#define ITER_3_10times ITER_3;ITER_3;ITER_3;ITER_3;ITER_3;ITER_3;ITER_3;ITER_3;ITER_3;ITER_3
-#define ITER_3_30times ITER_3_10times;ITER_3_10times;ITER_3_10times
-
-    ITER_3_30times;
-    ITER_3_30times;
-    ITER_3_30times;
-    ITER_3_30times;
-    ITER_3;ITER_3;ITER_3;ITER_3;
-
+    x0 = plaintext[0];
+    x1 = plaintext[1];
+    x2 = plaintext[2];
+    x3 = plaintext[3];
+    
     
     RND03(w[  0], w[  1], w[  2], w[  3], k[  0], k[  1], k[  2], k[  3]);
     RND02(w[  4], w[  5], w[  6], w[  7], k[  4], k[  5], k[  6], k[  7]);
@@ -537,10 +637,6 @@ __kernel void serpent_encrypt(__global uint32_t *key, __global uint32_t *plainte
     GENSUBKEY(31);
     GENSUBKEY(32);
  
-    x0 = plaintext[0];
-    x1 = plaintext[1];
-    x2 = plaintext[2];
-    x3 = plaintext[3];
 
     keying(x0, x1, x2, x3, subkeys[ 0]);
     RND00(x0, x1, x2, x3, y0, y1, y2, y3);

@@ -8,9 +8,12 @@
 
 typedef unsigned int    uint32_t;
 
+typedef unsigned char   BYTE;
+
 #define BLOCK_SIZE 16
 
 #define MEM_SIZE  4*sizeof(uint32_t)
+#define MEM_SIZE_KEY 132*sizeof(uint32_t)
 
 int main()
 {
@@ -27,6 +30,8 @@ int main()
     cl_mem memobj0 = NULL;
     cl_mem memobj1 = NULL;
     cl_mem memobj2 = NULL;
+    
+    //size_t workGroupSize;
 
     FILE *fp;
     char fileName[] = "./serpent.cl";
@@ -40,7 +45,6 @@ int main()
     unsigned char _plain[BLOCK_SIZE] = {0xBE,0xB6,0xC0,0x69,0x39,0x38,0x22,0xD3,0xBE,0x73,0xFF,0x30,0x52,0x5E,0xC4,0x3E};
     unsigned char _key[BLOCK_SIZE] = {0x2B,0xD6,0x45,0x9F,0x82,0xC5,0xB3,0x00,0x95,0x2C,0x49,0x10,0x48,0x81,0xFF,0x48};
     unsigned char _cipher[BLOCK_SIZE] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
-    unsigned char _cipher2[BLOCK_SIZE];
 
     //uint32_t correct[4];
     uint32_t plain[4];
@@ -48,6 +52,25 @@ int main()
     uint32_t cipher[4];
     uint32_t cipher2[4];
 
+    uint32_t w[132];
+    int i;
+
+    cl_ulong localMemorySize;
+    cl_ulong globalMemorySize;
+    cl_ulong globalCacheSize;
+    cl_uint  computationUnits;
+    char deviceVendor[200];
+    cl_uint  maxWorkItemDim;
+    size_t   maxWorkItem[10];
+    cl_uint  numberOfBits;
+    size_t   maxWorkGroupSize;
+
+    cl_ulong startTime, endTime;
+    float executionTime;
+    cl_event startEvent;
+
+    size_t global_work_size[1] = {1};
+    size_t local_work_size[1] = {1};
 
     int k;
 
@@ -85,9 +108,49 @@ int main()
 
     /* Create Command Queue */
     fprintf(stderr, "[INFO] Creating command queue\n");
-    command_queue = clCreateCommandQueue(context, device_id, 0, &ret);
+    command_queue = clCreateCommandQueue(context, device_id,
+        CL_QUEUE_PROFILING_ENABLE, // Enable profiling
+        &ret);
     assert(ret == CL_SUCCESS);
 
+    ret = clGetDeviceInfo(device_id, CL_DEVICE_VENDOR, sizeof(deviceVendor), deviceVendor, 0);    
+    assert(ret == CL_SUCCESS);
+    printf("[INFO] Device vendor: %s\n", deviceVendor);
+
+    ret = clGetDeviceInfo(device_id, CL_DEVICE_ADDRESS_BITS, sizeof(numberOfBits), &numberOfBits, 0);    
+    assert(ret == CL_SUCCESS);
+    printf("[INFO] Device address bits: %u\n", numberOfBits);
+
+    /* Print Local memory size */
+    ret = clGetDeviceInfo(device_id, CL_DEVICE_LOCAL_MEM_SIZE, sizeof(cl_ulong), &localMemorySize, 0);    
+    assert(ret == CL_SUCCESS);
+    printf("[INFO] Local Memory size: %lu Bytes\n", (long unsigned int) localMemorySize);
+
+    ret = clGetDeviceInfo(device_id, CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(cl_ulong), &globalMemorySize, 0);
+    assert(ret == CL_SUCCESS);
+    printf("[INFO] Global Memory size: %lu Bytes\n", (long unsigned int) globalMemorySize);
+
+    ret = clGetDeviceInfo(device_id, CL_DEVICE_GLOBAL_MEM_CACHE_SIZE, sizeof(cl_ulong), &globalCacheSize, 0);
+    assert(ret == CL_SUCCESS);
+    printf("[INFO] Global Cache size: %lu Bytes\n", (long unsigned int) globalCacheSize);
+
+    ret = clGetDeviceInfo(device_id, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(cl_uint), &computationUnits, 0);
+    assert(ret == CL_SUCCESS);
+    printf("[INFO] Total number of parallel compute cores: %u \n", (unsigned int) computationUnits);
+
+    ret = clGetDeviceInfo(device_id,  CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, sizeof(cl_uint), &maxWorkItemDim, 0);
+    assert(ret == CL_SUCCESS);
+    printf("[INFO] Max work item dimensions: %u \n", (unsigned int) maxWorkItemDim);
+
+    ret = clGetDeviceInfo(device_id,  CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(maxWorkItem), maxWorkItem, 0);
+    assert(ret == CL_SUCCESS);
+    for(i=1; i<=maxWorkItemDim; i++){
+        printf("[INFO] Max number of work items for dimension %d: %u \n", i, maxWorkItem[i]);
+    }
+
+    ret = clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(maxWorkGroupSize), &maxWorkGroupSize, 0);
+    assert(ret == CL_SUCCESS);
+    printf("[INFO] Max work group size: %u \n", (unsigned int) maxWorkGroupSize);
     
 
     /* Create Memory Buffer */
@@ -96,7 +159,7 @@ int main()
     memobj0 = clCreateBuffer(
         context,
         CL_MEM_READ_WRITE, // Memory in R/W mode
-        MEM_SIZE,
+        MEM_SIZE_KEY,
         NULL,
         &ret);
     assert(ret == CL_SUCCESS);
@@ -119,6 +182,54 @@ int main()
         &ret);
     assert(ret == CL_SUCCESS);
 
+/* Pre-computing the key roll */
+
+    printf("[INFO] Pre-computation of key\n");
+
+
+#define keyLen 128
+#define PHI 0x9e3779b9L
+#define ROL(x,n) ((((uint32_t)(x))<<(n))| \
+                  (((uint32_t)(x))>>(32-(n))))
+
+#define INIT  w[i]=key[i]; i++
+
+    i=0;
+
+    INIT;INIT;INIT;INIT;       
+    w[i]=(key[i]&((1L<<((keyLen&31)))-1))|(1L<<((keyLen&31)));
+    i++;
+
+#define SETZERO  w[i]=0;i++
+
+    SETZERO; SETZERO;SETZERO; SETZERO;
+    i=8;
+
+#define ITER_1    w[i]=ROL(w[i-8]^w[i-5]^w[i-3]^w[i-1]^PHI^(i-8),11);i++
+
+    ITER_1;ITER_1;ITER_1;ITER_1;ITER_1;ITER_1;ITER_1;ITER_1;
+
+#define ITER_2    w[i]=w[i+8];i++    
+
+    i=0;
+    ITER_2;ITER_2;ITER_2;ITER_2;ITER_2;ITER_2;ITER_2;ITER_2;
+    i=8;
+
+#define ITER_3    w[i]=ROL(w[i-8]^w[i-5]^w[i-3]^w[i-1]^PHI^i,11); i++
+#define ITER_3_10times ITER_3;ITER_3;ITER_3;ITER_3;ITER_3;ITER_3;ITER_3;ITER_3;ITER_3;ITER_3
+#define ITER_3_30times ITER_3_10times;ITER_3_10times;ITER_3_10times
+
+    ITER_3_30times;
+    ITER_3_30times;
+    ITER_3_30times;
+    ITER_3_30times;
+    ITER_3;ITER_3;ITER_3;ITER_3;
+
+    printf("[INFO] Pre-computation of key completed\n");
+    
+
+
+
 
     fprintf(stderr, "[INFO] Copying into memory buffer (key)\n");
     ret = clEnqueueWriteBuffer(
@@ -126,8 +237,8 @@ int main()
         memobj0,
         CL_TRUE,
         0,
-        MEM_SIZE,
-        key,
+        MEM_SIZE_KEY,
+        w,
         0,
         NULL,
         NULL);
@@ -224,10 +335,15 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
 
     /* Execute OpenCL Kernel */
     fprintf(stderr, "[INFO] Executing opencl kernel (enqueue task)\n");
-    ret = clEnqueueTask(command_queue, kernel, 0, NULL, NULL);
+    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL,
+        global_work_size,
+        local_work_size,
+        0,
+        NULL,
+        &startEvent
+    );
     assert(ret == CL_SUCCESS);
 
-    clFinish(command_queue);
 
     /* Copy results from the memory buffer */
 /*    fprintf(stderr, "[INFO] Copying results from memory buffer (string)\n");
@@ -268,19 +384,44 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
     assert(ret == CL_SUCCESS);
 
     if(memcmp(cipher2,correct,16) == 0)
-        printf("OK\n");
+        printf("[SUCCESS] Output ciphertext is correct!\n");
     else
-        printf("ERROR\n");
+        printf("[ERROR] Output ciphertext is not correct\n");
 
-    printf("Result: ");
+    printf("[OUTPUT] Result: ");
     //Display Result 
-    for (k=0;k<BLOCK_SIZE;k++){
+    for (k=0; k < BLOCK_SIZE; k++){
         printf("%02hhx", cipher2[k]);
     }
     printf("\n");
-    
 
-//    printf("Version: %c\n", string[0]);
+    printf("[INFO] Getting start time\n");
+    ret = clGetEventProfilingInfo(
+        startEvent,                              // the event object to get info for
+        CL_PROFILING_COMMAND_START,         // the profiling data to query
+        sizeof(cl_ulong),                   // the size of memory pointed by param_value
+        &startTime,                          // pointer to memory in which the query result is returned
+        NULL                    // actual number of bytes copied to param_value
+    );
+    assert(ret == CL_SUCCESS);
+
+    printf("[INFO] Getting end time\n");
+    ret = clGetEventProfilingInfo(
+        startEvent,                              // the event object to get info for
+        CL_PROFILING_COMMAND_END,         // the profiling data to query
+        sizeof(cl_ulong),                   // the size of memory pointed by param_value
+        &endTime,                          // pointer to memory in which the query result is returned
+        NULL                    // actual number of bytes copied to param_value
+    );
+    assert(ret == CL_SUCCESS);
+
+    
+    printf("[PERF] Start time: %lu\n", (long unsigned int) startTime);
+    printf("[PERF] End time  : %lu\n", (long unsigned int) endTime);
+
+    executionTime = ((float) (endTime-startTime))*0.000000001;
+
+    printf("[PERF] Execution time: %e\n", executionTime);
 
     /* Finalization */
     fprintf(stderr, "[INFO] Flushing and releasing buffers\n");
