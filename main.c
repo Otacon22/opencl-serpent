@@ -334,10 +334,15 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
 
 
     /* Execute OpenCL Kernel */
+    global_work_size[1] = 1;
+    local_work_size[1] = 1;
     fprintf(stderr, "[INFO] Executing opencl kernel (enqueue task)\n");
-    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL,
-        global_work_size,
-        local_work_size,
+    ret = clEnqueueNDRangeKernel(command_queue,
+        kernel,
+        1, //Number of dimensions (max = 3)
+        NULL,
+        global_work_size, //array che indica il numero di work-items che eseguiranno questo kernel, per ciascuna dimensione dichiarata
+        local_work_size, //Numero di work-items che creano un work-group
         0,
         NULL,
         &startEvent
