@@ -3,28 +3,9 @@
 #include <assert.h>
 #include <string.h>
 #include <CL/cl.h>
-
-#define MAX_SOURCE_SIZE (0x100000)
-
-typedef unsigned int    uint32_t;
-
-typedef unsigned char   BYTE;
-
-#define keyLen 128
+#include "serpentdefs.h"
 
 
-#define BLOCK_SIZE_IN_BYTES 16
-#define BLOCK_SIZE_IN_32BIT_WORDS 4
-
-#define NUM_WORK_ITEMS 32
-
-#define NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM 100
-
-#define NUM_ENCRYPT_BLOCKS NUM_WORK_ITEMS * NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM
-
-#define TOTAL_BLOCKS_SIZE BLOCK_SIZE_IN_32BIT_WORDS * NUM_ENCRYPT_BLOCKS   //4 32-bit words is the normal block. We want 10*32 blocks.
-#define MEM_SIZE  sizeof(uint32_t) * TOTAL_BLOCKS_SIZE
-#define MEM_SIZE_KEY 132*sizeof(uint32_t)
 
 
 cl_device_id device_id = NULL;
@@ -104,7 +85,8 @@ void load_kernel_source_code(){
     } else {
         fprintf(stderr, "[INFO] Kernel file loaded from file %s\n", fileName);
     }
-    source_str = (char *) malloc(MAX_SOURCE_SIZE);
+    source_str = (char *) malloc(MAX_SOURCE_SIZE+100); //+100 is for appending DEFINE of num work items
+
     source_size = fread(source_str, 1, MAX_SOURCE_SIZE, fp);
     fclose(fp);
 }
@@ -203,6 +185,7 @@ void create_opencl_memory_buffers(){
         NULL,
         &ret);
     assert(ret == CL_SUCCESS);
+
 }
 
 void pre_compute_key(){
@@ -267,7 +250,7 @@ void copy_data_to_opencl_buffers() {
         NULL);
     assert(ret == CL_SUCCESS);
 
-    fprintf(stderr, "[INFO] Copying into memory buffer (plain)\n");
+    fprintf(stderr, "[INFO] Copying into memory buffer (plain) - Size: %d Bytes \n", MEM_SIZE);
     ret = clEnqueueWriteBuffer(
         command_queue,
         memobj1,
@@ -280,7 +263,7 @@ void copy_data_to_opencl_buffers() {
         NULL);
     assert(ret == CL_SUCCESS);
 
-    fprintf(stderr, "[INFO] Copying into memory buffer (clean cipher (full of zeroes))\n");
+    fprintf(stderr, "[INFO] Copying into memory buffer (clean cipher (full of zeroes)) - Size: %d Bytes \n", MEM_SIZE);
     ret = clEnqueueWriteBuffer(
         command_queue,
         memobj2,
@@ -357,7 +340,6 @@ void set_kernel_parameters() {
         sizeof(cl_mem), //size of argument data
         (void *) &memobj2); // pointer of data used as the argument
     assert(ret == CL_SUCCESS);
-
 
 }
 
@@ -452,7 +434,19 @@ void release_opencl_resources() {
     free(source_str);
 }
 
+void print_perf_speed(){
+    float speed = (((float) (BLOCK_SIZE_IN_BYTES*NUM_ENCRYPT_BLOCKS))/executionTime);
 
+    printf("[PERF] Speed: %.2f B/s\n", speed);
+
+    if (speed/1073741824.0 >= 1.0){
+        printf("[PERF]     * Conversion: %.2f GiB/s\n", speed/1073741824.0);
+    } else if (speed/1048576.0 >= 1.0){ //it's Over 9000!!!!
+        printf("[PERF]     * Conversion: %.2f MiB/s\n", speed/1048576.0);
+    } else if (speed/1024.0 >= 1.0){
+        printf("[PERF]     * Conversion: %.2f kiB/s\n", speed/1024.0);
+    } 
+}
 
 
 
@@ -538,7 +532,7 @@ int main()
     copy_results_from_opencl_buffer();
 
     if(memcmp(cipher2, correct, BLOCK_SIZE_IN_BYTES*NUM_ENCRYPT_BLOCKS) == 0)
-        printf("[SUCCESS] Output ciphertext is correct!\n");
+        printf("\n[SUCCESS] Output ciphertext is correct!\n\n");
     else {
         /* Check if ciphertext is correct */
         for(k=0; k<(NUM_ENCRYPT_BLOCKS); k++){
@@ -547,7 +541,7 @@ int main()
                     &(correct[k*BLOCK_SIZE_IN_32BIT_WORDS]),
                     BLOCK_SIZE_IN_BYTES
                     ) == 0)){
-                printf("[ERROR] Output ciphertext is not correct! (block number %d, couting from 0)\n", k);
+                printf("\n[ERROR] Output ciphertext is not correct! (block number %d, couting from 0)\n\n", k);
                 exit(1); 
             }
         }
@@ -557,13 +551,13 @@ int main()
 
 
 
-    /* Print result */
+    /* Print result 
     printf("[OUTPUT] Result: ");
  
     for (k=BLOCK_SIZE_IN_BYTES*9; k < BLOCK_SIZE_IN_BYTES*12; k++){
         printf("%02hhx", ((char *) cipher2)[k]);
     }
-    printf("\n");
+    printf("\n");*/
 
     get_opencl_performance_time();
     
@@ -573,6 +567,11 @@ int main()
     executionTime = ((float) (endTime-startTime))*0.000000001;
 
     printf("[PERF] Execution time: %e\n", executionTime);
+
+    printf("[PERF] Encrypted data: %d Bytes\n", BLOCK_SIZE_IN_BYTES*NUM_ENCRYPT_BLOCKS);
+
+    /* Print calculated speed */
+    print_perf_speed();
 
     /* Release buffers and stuff */
     release_opencl_resources();
