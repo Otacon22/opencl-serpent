@@ -590,11 +590,7 @@
 #define PHI 0x9e3779b9L
 
 
-typedef unsigned char   BYTE;
 typedef unsigned int    uint32_t;
-
-
-#define keyLen 128 
 
 
 __kernel void serpent_encrypt(__constant uint32_t *_w, __constant uint32_t *plaintext, __global uint32_t *ciphertext)
