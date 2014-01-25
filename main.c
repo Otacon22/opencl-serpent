@@ -10,77 +10,92 @@ typedef unsigned int    uint32_t;
 
 typedef unsigned char   BYTE;
 
-#define BLOCK_SIZE 16
+#define keyLen 128
 
-#define MEM_SIZE  4*sizeof(uint32_t)
+
+#define BLOCK_SIZE_IN_BYTES 16
+#define BLOCK_SIZE_IN_32BIT_WORDS 4
+
+#define NUM_WORK_ITEMS 32
+
+#define NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM 10
+
+#define TOTAL_BLOCKS_SIZE BLOCK_SIZE_IN_32BIT_WORDS * NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM * NUM_WORK_ITEMS   //4 32-bit words is the normal block. We want 10*32 blocks.
+#define MEM_SIZE  sizeof(uint32_t)*TOTAL_BLOCKS_SIZE
 #define MEM_SIZE_KEY 132*sizeof(uint32_t)
 
-int main()
-{
-    cl_device_id device_id = NULL;
-    cl_context context = NULL;
-    cl_command_queue command_queue = NULL;
-    cl_program program = NULL;
-    cl_kernel kernel = NULL;
-    cl_platform_id platform_id = NULL;
-    cl_uint ret_num_devices;
-    cl_uint ret_num_platforms;
-    cl_int ret;
 
-    cl_mem memobj0 = NULL;
-    cl_mem memobj1 = NULL;
-    cl_mem memobj2 = NULL; 
-    
-    //size_t workGroupSize;
+cl_device_id device_id = NULL;
+cl_context context = NULL;
+cl_command_queue command_queue = NULL;
+cl_program program = NULL;
+cl_kernel kernel = NULL;
+cl_platform_id platform_id = NULL;
+cl_uint ret_num_devices;
+cl_uint ret_num_platforms;
+cl_int ret;
 
-    FILE *fp;
-    char fileName[] = "./serpent.cl";
+cl_mem memobj0 = NULL;
+cl_mem memobj1 = NULL;
+cl_mem memobj2 = NULL; 
+
+//size_t workGroupSize;
+
+FILE *fp;
+char fileName[] = "./serpent.cl";
 //    char fileName[] = "./check.cl";
-    char *source_str;
-    size_t source_size;
-    size_t log_size;
-    char *build_log;
+char *source_str;
+size_t source_size;
+size_t log_size;
+char *build_log;
 
-    unsigned char correct[BLOCK_SIZE] = {0xEA,0x02,0x47,0x14,0xAD,0x5C,0x4D,0x84,0xEA,0x02,0x47,0x14,0xAD,0x5C,0x4D,0x84};
-    unsigned char _plain[BLOCK_SIZE] = {0xBE,0xB6,0xC0,0x69,0x39,0x38,0x22,0xD3,0xBE,0x73,0xFF,0x30,0x52,0x5E,0xC4,0x3E};
-    unsigned char _key[BLOCK_SIZE] = {0x2B,0xD6,0x45,0x9F,0x82,0xC5,0xB3,0x00,0x95,0x2C,0x49,0x10,0x48,0x81,0xFF,0x48};
-    unsigned char _cipher[BLOCK_SIZE] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+unsigned char _correct[BLOCK_SIZE_IN_BYTES] = {0xEA,0x02,0x47,0x14,0xAD,0x5C,0x4D,0x84,0xEA,0x02,0x47,0x14,0xAD,0x5C,0x4D,0x84};
+unsigned char _plain[BLOCK_SIZE_IN_BYTES] = {0xBE,0xB6,0xC0,0x69,0x39,0x38,0x22,0xD3,0xBE,0x73,0xFF,0x30,0x52,0x5E,0xC4,0x3E};
+unsigned char _key[BLOCK_SIZE_IN_BYTES] = {0x2B,0xD6,0x45,0x9F,0x82,0xC5,0xB3,0x00,0x95,0x2C,0x49,0x10,0x48,0x81,0xFF,0x48};
+unsigned char _cipher[BLOCK_SIZE_IN_BYTES] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 
-    //uint32_t correct[4];
-    uint32_t plain[4];
-    uint32_t key[4];
-    uint32_t cipher[4];
-    uint32_t cipher2[4];
+uint32_t correct[TOTAL_BLOCKS_SIZE];
+uint32_t plain[TOTAL_BLOCKS_SIZE];
+uint32_t key[TOTAL_BLOCKS_SIZE];
+uint32_t cipher[TOTAL_BLOCKS_SIZE];
+uint32_t cipher2[TOTAL_BLOCKS_SIZE];
 
-    uint32_t w[132];
-    int i;
+uint32_t w[132];
 
-    cl_ulong localMemorySize;
-    cl_ulong globalMemorySize;
-    cl_ulong globalCacheSize;
-    cl_uint  computationUnits;
-    char deviceVendor[200];
-    cl_uint  maxWorkItemDim;
-    size_t   maxWorkItem[10];
-    cl_uint  numberOfBits;
-    size_t   maxWorkGroupSize;
 
-    cl_ulong startTime, endTime;
-    float executionTime;
-    cl_event startEvent;
+cl_ulong localMemorySize;
+cl_ulong globalMemorySize;
+cl_ulong globalCacheSize;
+cl_uint  computationUnits;
+char deviceVendor[200];
+cl_uint  maxWorkItemDim;
+size_t   maxWorkItem[10];
+cl_uint  numberOfBits;
+size_t   maxWorkGroupSize;
 
-    size_t global_work_size[1] = {1};
-    size_t local_work_size[1] = {1};
+cl_ulong startTime, endTime;
+float executionTime;
+cl_event startEvent;
 
+cl_uint workDimensions;
+size_t global_work_size[1] = {1};
+size_t local_work_size[1] = {1};
+
+
+void replicate_original_data_to_new_buffers(){
     int k;
 
+    memcpy(key, _key, BLOCK_SIZE_IN_BYTES);
+    for(k=0; k<(NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM * NUM_WORK_ITEMS);k++){
+        memcpy(&(plain[k*BLOCK_SIZE_IN_32BIT_WORDS]), _plain, BLOCK_SIZE_IN_BYTES);
+        memcpy(&(cipher[k*BLOCK_SIZE_IN_32BIT_WORDS]), _cipher, BLOCK_SIZE_IN_BYTES);
+        memcpy(&(correct[k*BLOCK_SIZE_IN_32BIT_WORDS]), _correct, BLOCK_SIZE_IN_BYTES);
+    }
 
-    memcpy(plain, _plain, 16);
-    memcpy(key, _key, 16);
-    memcpy(cipher, _cipher, 16);
+}
 
+void load_kernel_source_code(){
 
-    /* Load the source code containing the kernel */
     if (!(fp = fopen(fileName, "r"))) {
 	fprintf(stderr, "[ERR] Failed to load kernel from file %s\n", fileName);
 	exit(1);
@@ -90,6 +105,10 @@ int main()
     source_str = (char *) malloc(MAX_SOURCE_SIZE);
     source_size = fread(source_str, 1, MAX_SOURCE_SIZE, fp);
     fclose(fp);
+}
+
+void get_and_print_device_info(){
+    int i;
 
     /* Get Platform and Device Info */
     fprintf(stderr, "[INFO] Getting platform ID\n");
@@ -152,8 +171,9 @@ int main()
     assert(ret == CL_SUCCESS);
     printf("[INFO] Max work group size: %u \n", (unsigned int) maxWorkGroupSize);
     
+}
 
-    /* Create Memory Buffer */
+void create_opencl_memory_buffers(){
 
     fprintf(stderr, "[INFO] Creating memory buffer (for key)\n");
     memobj0 = clCreateBuffer(
@@ -181,13 +201,14 @@ int main()
         NULL,
         &ret);
     assert(ret == CL_SUCCESS);
+}
 
-/* Pre-computing the key roll */
+void pre_compute_key(){
+    int i;
 
     printf("[INFO] Pre-computation of key\n");
 
 
-#define keyLen 128
 #define PHI 0x9e3779b9L
 #define ROL(x,n) ((((uint32_t)(x))<<(n))| \
                   (((uint32_t)(x))>>(32-(n))))
@@ -225,11 +246,11 @@ int main()
     ITER_3_30times;
     ITER_3;ITER_3;ITER_3;ITER_3;
 
-    printf("[INFO] Pre-computation of key completed\n");
-    
+    printf("[INFO] Pre-computation of key completed\n"); 
+}
 
 
-
+void copy_data_to_opencl_buffers() {
 
     fprintf(stderr, "[INFO] Copying into memory buffer (key)\n");
     ret = clEnqueueWriteBuffer(
@@ -257,7 +278,7 @@ int main()
         NULL);
     assert(ret == CL_SUCCESS);
 
-    fprintf(stderr, "[INFO] Copying into memory buffer (clean cipher)\n");
+    fprintf(stderr, "[INFO] Copying into memory buffer (clean cipher (full of zeroes))\n");
     ret = clEnqueueWriteBuffer(
         command_queue,
         memobj2,
@@ -270,15 +291,19 @@ int main()
         NULL);
     assert(ret == CL_SUCCESS);
 
+}
 
-
-    /* Create Kernel Program from the source */
+void create_opencl_program_from_source(){
     fprintf(stderr, "[INFO] Creating kernel program from kernel source\n");
+
     program = clCreateProgramWithSource(context, 1, (const char **) &source_str, (const size_t *) &source_size, &ret);
     assert(ret == CL_SUCCESS);
+}
 
-    /* Build Kernel Program */
+
+void build_opencl_program(){
     fprintf(stderr, "[INFO] Building kernel program\n");
+
     ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
     if (ret != CL_SUCCESS){
 
@@ -296,16 +321,17 @@ int main()
         exit(1);
     }
 
-    /* Create OpenCL Kernel */
+}
+
+void create_opencl_kernel() {
     fprintf(stderr, "[INFO] Creating OpenCl kernel\n");
     kernel = clCreateKernel(program, "serpent_encrypt", &ret);
     assert(ret == CL_SUCCESS);
+}
 
-/*
-__kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintext, uint32_t ciphertext[4])
-*/
 
-    /* Set OpenCL Kernel Parameters */
+void set_kernel_parameters() {
+    
     fprintf(stderr, "[INFO] Setting kernel arguments (0) \n");
     ret = clSetKernelArg(
         kernel, //Kernel object
@@ -314,7 +340,6 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
         (void *) &memobj0); // pointer of data used as the argument
     assert(ret == CL_SUCCESS);
 
-    /* Set OpenCL Kernel Parameters */
     fprintf(stderr, "[INFO] Setting kernel arguments (1) \n");
     ret = clSetKernelArg(
         kernel, //Kernel object
@@ -323,7 +348,6 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
         (void *) &memobj1); // pointer of data used as the argument
     assert(ret == CL_SUCCESS);
 
-    /* Set OpenCL Kernel Parameters */
     fprintf(stderr, "[INFO] Setting kernel arguments (2) \n");
     ret = clSetKernelArg(
         kernel, //Kernel object
@@ -333,30 +357,39 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
     assert(ret == CL_SUCCESS);
 
 
-    /* Execute OpenCL Kernel */
-    global_work_size[1] = 1;
-    local_work_size[1] = 1;
+}
+
+void enqueue_opencl_kernel(){
+
     fprintf(stderr, "[INFO] Executing opencl kernel (enqueue task)\n");
-    ret = clEnqueueNDRangeKernel(command_queue,
+    ret = clEnqueueNDRangeKernel(
+        command_queue,
         kernel,
-        1, //Number of dimensions (max = 3)
+        workDimensions, //Number of dimensions (max = 3)
         NULL,
         global_work_size, //array che indica il numero di work-items che eseguiranno questo kernel, per ciascuna dimensione dichiarata
-        local_work_size, //Numero di work-items che creano un work-group. Il totale e' calcolato come il prodotto degli elementi dell'array. Il singolo elemento dell'array fa riferimento al numero di work-item che crea un gruppo nella dimensione n. Il numero totale deve essere minore di CL_DEVICE_MAX_WORK_GROUP_SIZE.
-//Inoltre i singoli elementi dell'array devono essere minori di CL_DEVICE_MAX_WORK_ITEM_SIZES[0]...[1]...
+        NULL, //Numero di work-items che creano un work-group. Il totale e' calcolato come il prodotto degli elementi dell'array. Il singolo elemento dell'array fa riferimento al numero di work-item che crea un gruppo nella dimensione n. Il numero totale deve essere minore di CL_DEVICE_MAX_WORK_GROUP_SIZE.
+//Inoltre i singoli elementi dell'array devono essere minori di CL_DEVICE_MAX_WORK_ITEM_SIZES[0]...[1]... Se e' NULL se ne occupa OpenCL di sceglierlo.
         0,
         NULL,
         &startEvent
     );
     assert(ret == CL_SUCCESS);
 
+}
 
+
+void wait_opencl_finish_exec(){
+    clFinish(command_queue);
+}
+
+void copy_results_from_opencl_buffer(){
     /* Copy results from the memory buffer */
     fprintf(stderr, "[INFO] Copying results from memory buffer (ciphertext)\n");
     ret = clEnqueueReadBuffer(
         command_queue,
         memobj2,
-        CL_TRUE,
+        CL_TRUE, //Blocking operation (wait finish)
         0,
         MEM_SIZE,
         cipher2, //output pointer
@@ -374,19 +407,9 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
     }
     assert(ret == CL_SUCCESS);
 
+}
 
-    if(memcmp(cipher2,correct,16) == 0)
-        printf("[SUCCESS] Output ciphertext is correct!\n");
-    else
-        printf("[ERROR] Output ciphertext is not correct\n");
-
-
-    printf("[OUTPUT] Result: ");
-    //Display Result 
-    for (k=0; k < 16; k++){
-        printf("%02hhx", ((char *) cipher2)[k]);
-    }
-    printf("\n");
+void get_opencl_performance_time() {
 
     printf("[INFO] Getting start time\n");
     ret = clGetEventProfilingInfo(
@@ -408,15 +431,11 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
     );
     assert(ret == CL_SUCCESS);
 
+}
+
+
+void release_opencl_resources() {
     
-    printf("[PERF] Start time: %lu\n", (long unsigned int) startTime);
-    printf("[PERF] End time  : %lu\n", (long unsigned int) endTime);
-
-    executionTime = ((float) (endTime-startTime))*0.000000001;
-
-    printf("[PERF] Execution time: %e\n", executionTime);
-
-    /* Finalization */
     fprintf(stderr, "[INFO] Flushing and releasing buffers\n");
     ret = clFlush(command_queue);
     ret = clFinish(command_queue);
@@ -429,6 +448,111 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
     ret = clReleaseContext(context);
 
     free(source_str);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+int main()
+{
+    int k;
+
+    replicate_original_data_to_new_buffers();
+
+    /* Load the source code containing the kernel */
+    load_kernel_source_code();
+    
+    /* Print and save some device-specific informations about this video card */
+    get_and_print_device_info();
+
+    /* Create Memory Buffer */
+    create_opencl_memory_buffers();
+
+
+    /* Pre-computing the Serpent key */
+    pre_compute_key();
+    
+
+    /* Copy key, clear and ciphertext (zeroes) to opencl memory buffers */
+    copy_data_to_opencl_buffers();
+    
+
+    /* Create Kernel Program from the source */
+    create_opencl_program_from_source();    
+
+    /* Build Kernel Program */
+    build_opencl_program();
+
+    /* Create OpenCL Kernel */
+    create_opencl_kernel();
+
+    /* Set OpenCL Kernel Parameters */
+    set_kernel_parameters();
+
+    /* Execute OpenCL Kernel */
+    workDimensions      = 1;
+    global_work_size[1] = NUM_WORK_ITEMS;
+    //local_work_size[1]  = 1; //????
+    //local_work_size = NULL;
+    enqueue_opencl_kernel();
+
+    /* Wait for gracefully termination of running operations */
+    wait_opencl_finish_exec();
+
+    /* Copy results from output buffer (ciphertext) */
+    copy_results_from_opencl_buffer();
+
+    /* Check if ciphertext is correct */
+    for(k=0; k<(10*32); k++){
+        if(!(memcmp(&(cipher2[k]),&(correct[k]),16) == 0)){
+            printf("[ERROR] Output ciphertext is not correct! (block number %d)\n", k);
+            exit(1); 
+        }
+    }
+    printf("[SUCCESS] Output ciphertext is correct\n");
+
+
+    if(memcmp(cipher2,correct,16*31) == 0)
+        printf("[SUCCESS] Output ciphertext is correct!\n");
+    else
+        printf("[ERROR] Output ciphertext is not correct\n");
+
+
+    /* Print result */
+    printf("[OUTPUT] Result: ");
+ 
+    for (k=0; k < 16; k++){
+        printf("%02hhx", ((char *) cipher2)[k]);
+    }
+    printf("\n");
+
+    get_opencl_performance_time();
+    
+    printf("[PERF] Start time: %lu\n", (long unsigned int) startTime);
+    printf("[PERF] End time  : %lu\n", (long unsigned int) endTime);
+
+    executionTime = ((float) (endTime-startTime))*0.000000001;
+
+    printf("[PERF] Execution time: %e\n", executionTime);
+
+    /* Release buffers and stuff */
+    release_opencl_resources();
 
     return 0;
 }

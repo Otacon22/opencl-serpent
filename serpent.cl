@@ -593,6 +593,9 @@
 typedef unsigned int    uint32_t;
 
 
+#define NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM 10
+
+
 __kernel void serpent_encrypt(__constant uint32_t *_w, __constant uint32_t *plaintext, __global uint32_t *ciphertext)
 {
     /* Stuff used by function for encryption functions. Must be private */
@@ -601,28 +604,44 @@ __kernel void serpent_encrypt(__constant uint32_t *_w, __constant uint32_t *plai
     __private uint32_t y0, y1, y2, y3;
     __private uint32_t k[132];
     __private uint32_t subkeys[33][4];
+    __private int i=0, j=0;
 
     __local uint32_t w[132];
+
+    size_t num_work_items = get_global_size(0); // get number of work items for dimension 1
+    size_t kernel_id = get_global_id(0);
+    
 
 
     /* Copying pre-processed key from global to local */
     copy_pre_processed_key(w,_w);
 
-    /* Copying plaintext from global to private */
-    x0 = plaintext[0];
-    x1 = plaintext[1];
-    x2 = plaintext[2];
-    x3 = plaintext[3];
-        
-    /* Doing the actual work */
-    round_operations(w,k);                                //Read only w, write k.
-    gensubkey_operations();                               //Read k, write subkeys
-    keying_round_transf(x0,x1,x2,x3,y0,y1,y2,y3,subkeys); //Read subkeys, write others
-  
-    /* Copying ciphertext from private to global memory */
-    ciphertext[0] = x0;
-    ciphertext[1] = x1;
-    ciphertext[2] = x2;
-    ciphertext[3] = x3;
+    barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
 
+    j = kernel_id*4;
+    for (;i < NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM; i++){
+        
+        /* Copying plaintext from global to private */
+        x0 = plaintext[j]; 
+        x1 = plaintext[j+1];
+        x2 = plaintext[j+2];
+        x3 = plaintext[j+3];
+
+        barrier(CLK_LOCAL_MEM_FENCE); //Needed?
+            
+        /* Doing the actual work */
+        round_operations(w,k);                                //Read only w, write k.
+        gensubkey_operations();                               //Read k, write subkeys
+        keying_round_transf(x0,x1,x2,x3,y0,y1,y2,y3,subkeys); //Read subkeys, write others
+      
+        /* Copying ciphertext from private to global memory */
+        ciphertext[j] = x0;
+        ciphertext[j+1] = x1;
+        ciphertext[j+2] = x2;
+        ciphertext[j+3] = x3;
+
+        barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
+        
+        j += num_work_items*4;
+    }
 }
