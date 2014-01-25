@@ -37,11 +37,21 @@ unsigned char _plain[BLOCK_SIZE_IN_BYTES] = {0xBE,0xB6,0xC0,0x69,0x39,0x38,0x22,
 unsigned char _key[BLOCK_SIZE_IN_BYTES] = {0x2B,0xD6,0x45,0x9F,0x82,0xC5,0xB3,0x00,0x95,0x2C,0x49,0x10,0x48,0x81,0xFF,0x48};
 unsigned char _cipher[BLOCK_SIZE_IN_BYTES] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 
+/*
 uint32_t correct[TOTAL_BLOCKS_SIZE];
 uint32_t plain[TOTAL_BLOCKS_SIZE];
 uint32_t key[TOTAL_BLOCKS_SIZE];
 uint32_t cipher[TOTAL_BLOCKS_SIZE];
 uint32_t cipher2[TOTAL_BLOCKS_SIZE];
+*/
+
+uint32_t *correct;
+uint32_t *plain;
+uint32_t key[BLOCK_SIZE_IN_32BIT_WORDS];
+uint32_t *cipher;
+uint32_t *cipher2;
+
+
 
 uint32_t w[132];
 
@@ -64,6 +74,37 @@ cl_uint workDimensions;
 size_t global_work_size;
 size_t local_work_size[1] = {1};
 
+
+void check_needed_size(){
+    size_t required_on_video_card = (MEM_SIZE * 2)+(132*4);
+    size_t required_on_host = required_on_video_card + (MEM_SIZE * 2);
+
+    printf("[INFO] Memory required on video card: %d Bytes (%.2f MiB) \n", required_on_video_card, required_on_video_card/1048576.0);
+    if (required_on_video_card >= globalMemorySize){
+        printf("[ERROR] Requested memory is larger than the avalable memory on the video card!\n");
+        exit(1);
+    }
+    printf("[INFO] Memory required on the host: %d Bytes (%.2f MiB)\n", required_on_host, required_on_host/1048576.0);
+}
+
+void allocate_data_buffers(){
+    if ((plain = malloc(MEM_SIZE)) == NULL){
+        printf("Memory error\n");
+        exit(1);
+    }
+    if ((correct = malloc(MEM_SIZE)) == NULL){
+        printf("Memory error\n");
+        exit(1);
+    }
+    if ((cipher = malloc(MEM_SIZE)) == NULL){
+        printf("Memory error\n");
+        exit(1);
+    }
+    if ((cipher2 = malloc(MEM_SIZE)) == NULL){
+        printf("Memory error\n");
+        exit(1);
+    }
+}
 
 void replicate_original_data_to_new_buffers(){
     int k;
@@ -486,13 +527,19 @@ int main()
 {
     int k;
 
+    /* Print and save some device-specific informations about this video card */
+    get_and_print_device_info();
+
+    check_needed_size();
+
+    allocate_data_buffers();
+
     replicate_original_data_to_new_buffers();
 
     /* Load the source code containing the kernel */
     load_kernel_source_code();
     
-    /* Print and save some device-specific informations about this video card */
-    get_and_print_device_info();
+    
 
     /* Create Memory Buffer */
     create_opencl_memory_buffers();
