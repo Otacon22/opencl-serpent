@@ -29,7 +29,7 @@ int main()
 
     cl_mem memobj0 = NULL;
     cl_mem memobj1 = NULL;
-    cl_mem memobj2 = NULL;
+    cl_mem memobj2 = NULL; 
     
     //size_t workGroupSize;
 
@@ -158,7 +158,7 @@ int main()
     fprintf(stderr, "[INFO] Creating memory buffer (for key)\n");
     memobj0 = clCreateBuffer(
         context,
-        CL_MEM_READ_WRITE, // Memory in R/W mode
+        CL_MEM_READ_ONLY, // Memory in Read only mode
         MEM_SIZE_KEY,
         NULL,
         &ret);
@@ -342,7 +342,8 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
         1, //Number of dimensions (max = 3)
         NULL,
         global_work_size, //array che indica il numero di work-items che eseguiranno questo kernel, per ciascuna dimensione dichiarata
-        local_work_size, //Numero di work-items che creano un work-group
+        local_work_size, //Numero di work-items che creano un work-group. Il totale e' calcolato come il prodotto degli elementi dell'array. Il singolo elemento dell'array fa riferimento al numero di work-item che crea un gruppo nella dimensione n. Il numero totale deve essere minore di CL_DEVICE_MAX_WORK_GROUP_SIZE.
+//Inoltre i singoli elementi dell'array devono essere minori di CL_DEVICE_MAX_WORK_ITEM_SIZES[0]...[1]...
         0,
         NULL,
         &startEvent
@@ -395,8 +396,8 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
 
     printf("[OUTPUT] Result: ");
     //Display Result 
-    for (k=0; k < BLOCK_SIZE; k++){
-        printf("%02hhx", cipher2[k]);
+    for (k=0; k < 16; k++){
+        printf("%02hhx", ((char *) cipher2)[k]);
     }
     printf("\n");
 
