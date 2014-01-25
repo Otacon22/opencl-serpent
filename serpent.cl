@@ -593,7 +593,7 @@
 typedef unsigned int    uint32_t;
 
 
-#define NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM 10
+#define NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM 100
 
 
 __kernel void serpent_encrypt(__constant uint32_t *_w, __constant uint32_t *plaintext, __global uint32_t *ciphertext)
@@ -609,7 +609,7 @@ __kernel void serpent_encrypt(__constant uint32_t *_w, __constant uint32_t *plai
     __local uint32_t w[132];
 
     size_t num_work_items = get_global_size(0); // get number of work items for dimension 1
-    size_t kernel_id = get_global_id(0);
+    size_t kernel_id = get_global_id(0); // get work item id
     
 
 

@@ -18,10 +18,12 @@ typedef unsigned char   BYTE;
 
 #define NUM_WORK_ITEMS 32
 
-#define NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM 10
+#define NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM 100
 
-#define TOTAL_BLOCKS_SIZE BLOCK_SIZE_IN_32BIT_WORDS * NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM * NUM_WORK_ITEMS   //4 32-bit words is the normal block. We want 10*32 blocks.
-#define MEM_SIZE  sizeof(uint32_t)*TOTAL_BLOCKS_SIZE
+#define NUM_ENCRYPT_BLOCKS NUM_WORK_ITEMS * NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM
+
+#define TOTAL_BLOCKS_SIZE BLOCK_SIZE_IN_32BIT_WORDS * NUM_ENCRYPT_BLOCKS   //4 32-bit words is the normal block. We want 10*32 blocks.
+#define MEM_SIZE  sizeof(uint32_t) * TOTAL_BLOCKS_SIZE
 #define MEM_SIZE_KEY 132*sizeof(uint32_t)
 
 
@@ -78,7 +80,7 @@ float executionTime;
 cl_event startEvent;
 
 cl_uint workDimensions;
-size_t global_work_size[1] = {1};
+size_t global_work_size;
 size_t local_work_size[1] = {1};
 
 
@@ -86,7 +88,7 @@ void replicate_original_data_to_new_buffers(){
     int k;
 
     memcpy(key, _key, BLOCK_SIZE_IN_BYTES);
-    for(k=0; k<(NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM * NUM_WORK_ITEMS);k++){
+    for(k=0; k<(NUM_ENCRYPT_BLOCKS);k++){
         memcpy(&(plain[k*BLOCK_SIZE_IN_32BIT_WORDS]), _plain, BLOCK_SIZE_IN_BYTES);
         memcpy(&(cipher[k*BLOCK_SIZE_IN_32BIT_WORDS]), _cipher, BLOCK_SIZE_IN_BYTES);
         memcpy(&(correct[k*BLOCK_SIZE_IN_32BIT_WORDS]), _correct, BLOCK_SIZE_IN_BYTES);
@@ -367,7 +369,7 @@ void enqueue_opencl_kernel(){
         kernel,
         workDimensions, //Number of dimensions (max = 3)
         NULL,
-        global_work_size, //array che indica il numero di work-items che eseguiranno questo kernel, per ciascuna dimensione dichiarata
+        &global_work_size, //array che indica il numero di work-items che eseguiranno questo kernel, per ciascuna dimensione dichiarata
         NULL, //Numero di work-items che creano un work-group. Il totale e' calcolato come il prodotto degli elementi dell'array. Il singolo elemento dell'array fa riferimento al numero di work-item che crea un gruppo nella dimensione n. Il numero totale deve essere minore di CL_DEVICE_MAX_WORK_GROUP_SIZE.
 //Inoltre i singoli elementi dell'array devono essere minori di CL_DEVICE_MAX_WORK_ITEM_SIZES[0]...[1]... Se e' NULL se ne occupa OpenCL di sceglierlo.
         0,
@@ -469,6 +471,23 @@ void release_opencl_resources() {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 int main()
 {
     int k;
@@ -507,7 +526,7 @@ int main()
 
     /* Execute OpenCL Kernel */
     workDimensions      = 1;
-    global_work_size[1] = NUM_WORK_ITEMS;
+    global_work_size    = NUM_WORK_ITEMS;
     //local_work_size[1]  = 1; //????
     //local_work_size = NULL;
     enqueue_opencl_kernel();
@@ -518,26 +537,30 @@ int main()
     /* Copy results from output buffer (ciphertext) */
     copy_results_from_opencl_buffer();
 
-    /* Check if ciphertext is correct */
-    for(k=0; k<(10*32); k++){
-        if(!(memcmp(&(cipher2[k]),&(correct[k]),16) == 0)){
-            printf("[ERROR] Output ciphertext is not correct! (block number %d)\n", k);
-            exit(1); 
-        }
-    }
-    printf("[SUCCESS] Output ciphertext is correct\n");
-
-
-    if(memcmp(cipher2,correct,16*31) == 0)
+    if(memcmp(cipher2, correct, BLOCK_SIZE_IN_BYTES*NUM_ENCRYPT_BLOCKS) == 0)
         printf("[SUCCESS] Output ciphertext is correct!\n");
-    else
-        printf("[ERROR] Output ciphertext is not correct\n");
+    else {
+        /* Check if ciphertext is correct */
+        for(k=0; k<(NUM_ENCRYPT_BLOCKS); k++){
+            if(!(memcmp(
+                    &(cipher2[k*BLOCK_SIZE_IN_32BIT_WORDS]),
+                    &(correct[k*BLOCK_SIZE_IN_32BIT_WORDS]),
+                    BLOCK_SIZE_IN_BYTES
+                    ) == 0)){
+                printf("[ERROR] Output ciphertext is not correct! (block number %d, couting from 0)\n", k);
+                exit(1); 
+            }
+        }
+        printf("[CHECK] Strange behaviour detected. Check me\n");
+    }
+
+
 
 
     /* Print result */
     printf("[OUTPUT] Result: ");
  
-    for (k=0; k < 16; k++){
+    for (k=BLOCK_SIZE_IN_BYTES*9; k < BLOCK_SIZE_IN_BYTES*12; k++){
         printf("%02hhx", ((char *) cipher2)[k]);
     }
     printf("\n");
