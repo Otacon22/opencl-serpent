@@ -167,7 +167,7 @@ int main()
     fprintf(stderr, "[INFO] Creating memory buffer (for plaintext)\n");
     memobj1 = clCreateBuffer(
         context,
-        CL_MEM_READ_WRITE, // Memory in R/W mode
+        CL_MEM_READ_ONLY, // Memory in Read only mode
         MEM_SIZE,
         NULL,
         &ret);
@@ -352,21 +352,6 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
 
 
     /* Copy results from the memory buffer */
-/*    fprintf(stderr, "[INFO] Copying results from memory buffer (string)\n");
-    ret = clEnqueueReadBuffer(
-        command_queue,
-        memobj, 
-        CL_TRUE,
-        0,
-        BLOCK_SIZE * sizeof(unsigned char),
-        string, //output pointer
-        0,
-        NULL,
-        NULL
-        );
-    assert(ret == CL_SUCCESS);*/
-
-    /* Copy results from the memory buffer */
     fprintf(stderr, "[INFO] Copying results from memory buffer (ciphertext)\n");
     ret = clEnqueueReadBuffer(
         command_queue,
@@ -389,10 +374,12 @@ __kernel void serpent_encrypt(__global char *string, char *_key, char *_plaintex
     }
     assert(ret == CL_SUCCESS);
 
+
     if(memcmp(cipher2,correct,16) == 0)
         printf("[SUCCESS] Output ciphertext is correct!\n");
     else
         printf("[ERROR] Output ciphertext is not correct\n");
+
 
     printf("[OUTPUT] Result: ");
     //Display Result 
