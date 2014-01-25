@@ -599,35 +599,34 @@ typedef unsigned int    uint32_t;
 
 __kernel void serpent_encrypt(__constant uint32_t *_w, __constant uint32_t *plaintext, __global uint32_t *ciphertext)
 {
-    __local uint32_t t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18;
-    
-    __local uint32_t x0, x1, x2, x3; 
-    __local uint32_t y0, y1, y2, y3;
+    /* Stuff used by function for encryption functions. Must be private */
+    __private uint32_t t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18;
+    __private uint32_t x0, x1, x2, x3; 
+    __private uint32_t y0, y1, y2, y3;
+    __private uint32_t k[132];
+    __private uint32_t subkeys[33][4];
 
-    __local uint32_t k[132];
     __local uint32_t w[132];
-  
-    __local uint32_t subkeys[33][4];
 
-    /* Copying pre-processed key from global address space to local */
+
+    /* Copying pre-processed key from global to local */
     copy_pre_processed_key(w,_w);
 
-    /* Copying plaintext from global to local */
+    /* Copying plaintext from global to private */
     x0 = plaintext[0];
     x1 = plaintext[1];
     x2 = plaintext[2];
     x3 = plaintext[3];
         
-    round_operations(w,k); //Read only w, write k.
-
-    gensubkey_operations(); //Read k, write subkeys
-
+    /* Doing the actual work */
+    round_operations(w,k);                                //Read only w, write k.
+    gensubkey_operations();                               //Read k, write subkeys
     keying_round_transf(x0,x1,x2,x3,y0,y1,y2,y3,subkeys); //Read subkeys, write others
   
+    /* Copying ciphertext from private to global memory */
     ciphertext[0] = x0;
     ciphertext[1] = x1;
     ciphertext[2] = x2;
     ciphertext[3] = x3;
-
 
 }
