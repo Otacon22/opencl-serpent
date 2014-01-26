@@ -1,7 +1,8 @@
 #!/usr/bin/python
 import os
+from time import timep
 
-fd = open("performance_data.csv","w")
+fd = open("performance_data"+str(int(time()))+".csv","w")
 
 for workitems in [1,16,32,64,128,256,512,1024,2048,4096]:
     for loops in [1,16,32,64,128,256,512,1024,2048,4096,10000]:
