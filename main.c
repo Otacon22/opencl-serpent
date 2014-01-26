@@ -85,6 +85,19 @@ void experiment_size_declarations(){
     total_blocks_size = BLOCK_SIZE_IN_32BIT_WORDS * num_encrypt_blocks;
     mem_size = sizeof(uint32_t) * total_blocks_size;
     mem_size_key = 132*sizeof(uint32_t);
+
+}
+
+void print_experiment_size_parameters(){
+
+    fprintf(stderr, "\n---------------- Experiment parameters ----------------\n\n");
+
+    printf("[INFO] Key size: %d bit\n", keyLen);
+    printf("[INFO] Block size: %d Byte\n", BLOCK_SIZE_IN_BYTES);
+    printf("[INFO] Number of work-items: %d\n", num_work_items);
+    printf("[INFO] Number of blocks to encrypt for work item: %d\n", num_encrypt_blocks_for_work_item);
+    printf("[INFO] Total number of blocks to encrypt with given parameters: %d blocks\n", total_blocks_size);
+
 }
 
 
@@ -587,6 +600,8 @@ int main(int argc, char **argv){
 
     /*Initialize work value (number of work items, number of blocks for work-item... end so on)*/
     experiment_size_declarations();
+
+    print_experiment_size_parameters();
 
     /* Print and save some device-specific informations about this video card */
     get_and_print_device_info();
