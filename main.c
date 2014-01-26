@@ -40,6 +40,7 @@ size_t source_size = 0;
 size_t log_size;
 char *build_log;
 
+int verbose = 0;
 
 /* Optarg stuff */
 static const struct option long_options[] = {
@@ -101,6 +102,12 @@ size_t mem_size;
 size_t mem_size_key;
 
 
+void verbose_printf(char *str){
+    if(verbose){
+        printf("%s", str);
+    }
+}
+
 void print_usage(char **argv){
     printf("OpenCL serpent\nUsage: %s [-options]\n\n", argv[0]);
     printf("\t-h --help\t\t\t\t: Print this usage\n");
@@ -121,6 +128,7 @@ void parse_arguments(int argc, char **argv){
                 print_usage(argv);
                 break;
             case 'v':
+                verbose = 1;
                 break;
             case 'w':
                 num_work_items = atoi(optarg);
@@ -137,7 +145,6 @@ void parse_arguments(int argc, char **argv){
 void experiment_size_default_declarations(){
     num_work_items = 2048;
     num_encrypt_blocks_for_work_item = 10000;
-
 }
 
 void calculate_experiment_parameters(){
@@ -149,13 +156,13 @@ void calculate_experiment_parameters(){
 
 void print_experiment_size_parameters(){
 
-    fprintf(stderr, "\n---------------- Experiment parameters ----------------\n\n");
+        printf("\n---------------- Experiment parameters ----------------\n\n");
 
-    printf("[INFO] Key size: %d bit\n", keyLen);
-    printf("[INFO] Block size: %d Byte\n", BLOCK_SIZE_IN_BYTES);
-    printf("[INFO] Number of work-items: %d\n", num_work_items);
-    printf("[INFO] Number of blocks to encrypt for work item: %d\n", num_encrypt_blocks_for_work_item);
-    printf("[INFO] Total number of blocks to encrypt with given parameters: %d blocks\n", total_blocks_size);
+        printf("[INFO] Key size: %d bit\n", keyLen);
+        printf("[INFO] Block size: %d Byte\n", BLOCK_SIZE_IN_BYTES);
+        printf("[INFO] Number of work-items: %d\n", num_work_items);
+        printf("[INFO] Number of blocks to encrypt for work item: %d\n", num_encrypt_blocks_for_work_item);
+        if (verbose) printf("[INFO] Total number of blocks to encrypt with given parameters: %d blocks\n", total_blocks_size);
 
 }
 
@@ -164,12 +171,17 @@ void check_needed_size(){
     size_t required_on_video_card = (mem_size * 2)+(132*4);
     size_t required_on_host = required_on_video_card + (mem_size * 2);
 
-    printf("[INFO] Memory required on video card: %d Bytes (%.2f MiB) \n", required_on_video_card, required_on_video_card/1048576.0);
+    if(verbose){
+        printf("[INFO] Memory required on video card: %d Bytes (%.2f MiB) \n", required_on_video_card, required_on_video_card/1048576.0);
+    }
     if (required_on_video_card >= globalMemorySize){
         printf("[ERROR] Requested memory is larger than the avalable memory on the video card!\n");
         exit(1);
     }
-    printf("[INFO] Memory required on the host: %d Bytes (%.2f MiB)\n", required_on_host, required_on_host/1048576.0);
+    if(verbose){
+        printf("[INFO] Memory required on the host: %d Bytes (%.2f MiB)\n", required_on_host, required_on_host/1048576.0);
+    }
+
 }
 
 void allocate_data_buffers(){
@@ -207,10 +219,10 @@ void load_kernel_source_code(){
     int wrote = 0;
 
     if (!(fp = fopen(fileName, "r"))) {
-	fprintf(stderr, "[ERR] Failed to load kernel from file %s\n", fileName);
-	exit(1);
+	    printf("[ERR] Failed to load kernel from file %s\n", fileName);
+	    exit(1);
     } else {
-        fprintf(stderr, "[INFO] Kernel file loaded from file %s\n", fileName);
+        if(verbose){printf( "[INFO] Kernel file loaded from file %s\n", fileName);}
     }
     source_str = (char *) malloc(MAX_SOURCE_SIZE+(200*sizeof(char))); //+100 is for safely appending DEFINE of num work items
 
@@ -227,25 +239,25 @@ void get_and_print_device_info(){
 
     int i;
 
-    fprintf(stderr, "\n---------------- Device Informations ----------------\n\n");
+    verbose_printf( "\n---------------- Device Informations ----------------\n\n");
 
     /* Get Platform and Device Info */
-    fprintf(stderr, "[INFO] Getting platform ID\n");
+    verbose_printf( "[INFO] Getting platform ID\n");
     ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
     assert(ret == CL_SUCCESS);
 
-    fprintf(stderr, "[INFO] Getting device ID and info\n");
+    verbose_printf( "[INFO] Getting device ID and info\n");
     ret = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_DEFAULT, 1, &device_id,
 		       &ret_num_devices);
     assert(ret == CL_SUCCESS);
 
     /* Create OpenCL context */
-    fprintf(stderr, "[INFO] Creating OpenCL context\n");
+    verbose_printf( "[INFO] Creating OpenCL context\n");
     context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
     assert(ret == CL_SUCCESS);
 
     /* Create Command Queue */
-    fprintf(stderr, "[INFO] Creating command queue\n");
+    verbose_printf( "[INFO] Creating command queue\n");
     command_queue = clCreateCommandQueue(context, device_id,
         CL_QUEUE_PROFILING_ENABLE, // Enable profiling
         &ret);
@@ -253,52 +265,54 @@ void get_and_print_device_info(){
 
     ret = clGetDeviceInfo(device_id, CL_DEVICE_VENDOR, sizeof(deviceVendor), deviceVendor, 0);    
     assert(ret == CL_SUCCESS);
-    printf("[INFO] Device vendor: %s\n", deviceVendor);
+    if (verbose) printf("[INFO] Device vendor: %s\n", deviceVendor);
 
     ret = clGetDeviceInfo(device_id, CL_DEVICE_ADDRESS_BITS, sizeof(numberOfBits), &numberOfBits, 0);    
     assert(ret == CL_SUCCESS);
-    printf("[INFO] Device address bits: %u\n", numberOfBits);
+    if (verbose) printf("[INFO] Device address bits: %u\n", numberOfBits);
 
     /* Print Local memory size */
     ret = clGetDeviceInfo(device_id, CL_DEVICE_LOCAL_MEM_SIZE, sizeof(cl_ulong), &localMemorySize, 0);    
     assert(ret == CL_SUCCESS);
-    printf("[INFO] Local Memory size: %lu Bytes\n", (long unsigned int) localMemorySize);
+    if (verbose) printf("[INFO] Local Memory size: %lu Bytes\n", (long unsigned int) localMemorySize);
 
     ret = clGetDeviceInfo(device_id, CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(cl_ulong), &globalMemorySize, 0);
     assert(ret == CL_SUCCESS);
-    printf("[INFO] Global Memory size: %lu Bytes\n", (long unsigned int) globalMemorySize);
+    if (verbose) printf("[INFO] Global Memory size: %lu Bytes\n", (long unsigned int) globalMemorySize);
 
     ret = clGetDeviceInfo(device_id, CL_DEVICE_GLOBAL_MEM_CACHE_SIZE, sizeof(cl_ulong), &globalCacheSize, 0);
     assert(ret == CL_SUCCESS);
-    printf("[INFO] Global Cache size: %lu Bytes\n", (long unsigned int) globalCacheSize);
+    if (verbose) printf("[INFO] Global Cache size: %lu Bytes\n", (long unsigned int) globalCacheSize);
 
     ret = clGetDeviceInfo(device_id, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(cl_uint), &computationUnits, 0);
     assert(ret == CL_SUCCESS);
-    printf("[INFO] Total number of parallel compute cores: %u \n", (unsigned int) computationUnits);
+    if (verbose) printf("[INFO] Total number of parallel compute cores: %u \n", (unsigned int) computationUnits);
 
     ret = clGetDeviceInfo(device_id,  CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, sizeof(cl_uint), &maxWorkItemDim, 0);
     assert(ret == CL_SUCCESS);
-    printf("[INFO] Max work item dimensions: %u \n", (unsigned int) maxWorkItemDim);
+    if (verbose) printf("[INFO] Max work item dimensions: %u \n", (unsigned int) maxWorkItemDim);
 
     //TODO: malloc maxWorkItem
 
     ret = clGetDeviceInfo(device_id,  CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(maxWorkItem), maxWorkItem, 0);
     assert(ret == CL_SUCCESS);
-    for(i=1; i<=maxWorkItemDim; i++){
-        printf("[INFO] Max number of work items for dimension %d: %u \n", i, maxWorkItem[i]);
+    if (verbose) { 
+        for(i=1; i<=maxWorkItemDim; i++){
+            printf("[INFO] Max number of work items for dimension %d: %u \n", i, maxWorkItem[i]);
+        }
     }
 
     ret = clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(maxWorkGroupSize), &maxWorkGroupSize, 0);
     assert(ret == CL_SUCCESS);
-    printf("[INFO] Max work group size: %u \n", (unsigned int) maxWorkGroupSize);
+    if (verbose) printf("[INFO] Max work group size: %u \n", (unsigned int) maxWorkGroupSize);
     
 }
 
 void create_opencl_memory_buffers(){
 
-    fprintf(stderr, "\n---------------- Buffer creation ----------------\n\n");
+    verbose_printf( "\n---------------- Buffer creation ----------------\n\n");
 
-    fprintf(stderr, "[INFO] Creating memory buffer (for key)\n");
+    verbose_printf( "[INFO] Creating memory buffer (for key)\n");
     memobj0 = clCreateBuffer(
         context,
         CL_MEM_READ_ONLY, // Memory in Read only mode
@@ -307,7 +321,7 @@ void create_opencl_memory_buffers(){
         &ret);
     assert(ret == CL_SUCCESS);
 
-    fprintf(stderr, "[INFO] Creating memory buffer (for plaintext)\n");
+    verbose_printf( "[INFO] Creating memory buffer (for plaintext)\n");
     memobj1 = clCreateBuffer(
         context,
         CL_MEM_READ_ONLY, // Memory in Read only mode
@@ -316,7 +330,7 @@ void create_opencl_memory_buffers(){
         &ret);
     assert(ret == CL_SUCCESS);
 
-    fprintf(stderr, "[INFO] Creating memory buffer (for ciphertext)\n");
+    verbose_printf( "[INFO] Creating memory buffer (for ciphertext)\n");
     memobj2 = clCreateBuffer(
         context,
         CL_MEM_READ_WRITE, // Memory in R/W mode
@@ -330,9 +344,9 @@ void create_opencl_memory_buffers(){
 void pre_compute_key(){
     int i;
 
-    fprintf(stderr, "\n---------------- Key pre-computation ----------------\n\n");
+    verbose_printf( "\n---------------- Key pre-computation ----------------\n\n");
 
-    printf("[INFO] Pre-computation of key\n");
+    verbose_printf("[INFO] Pre-computation of key\n");
 
 
 #define PHI 0x9e3779b9L
@@ -372,15 +386,15 @@ void pre_compute_key(){
     ITER_3_30times;
     ITER_3;ITER_3;ITER_3;ITER_3;
 
-    printf("[INFO] Pre-computation of key completed\n"); 
+    verbose_printf("[INFO] Pre-computation of key completed\n"); 
 }
 
 
 void copy_data_to_opencl_buffers() {
 
-    fprintf(stderr, "\n---------------- Buffer copy ----------------\n\n");
+    verbose_printf( "\n---------------- Buffer copy ----------------\n\n");
 
-    fprintf(stderr, "[INFO] Copying into memory buffer (key)\n");
+    verbose_printf( "[INFO] Copying into memory buffer (key)\n");
     ret = clEnqueueWriteBuffer(
         command_queue,
         memobj0,
@@ -393,7 +407,7 @@ void copy_data_to_opencl_buffers() {
         NULL);
     assert(ret == CL_SUCCESS);
 
-    fprintf(stderr, "[INFO] Copying into memory buffer (plain) - Size: %d Bytes \n", mem_size);
+    if(verbose) printf( "[INFO] Copying into memory buffer (plain) - Size: %d Bytes \n", mem_size);
     ret = clEnqueueWriteBuffer(
         command_queue,
         memobj1,
@@ -406,7 +420,7 @@ void copy_data_to_opencl_buffers() {
         NULL);
     assert(ret == CL_SUCCESS);
 
-    fprintf(stderr, "[INFO] Copying into memory buffer (clean cipher (full of zeroes)) - Size: %d Bytes \n", mem_size);
+    if(verbose) printf( "[INFO] Copying into memory buffer (clean cipher (full of zeroes)) - Size: %d Bytes \n", mem_size);
     ret = clEnqueueWriteBuffer(
         command_queue,
         memobj2,
@@ -422,7 +436,7 @@ void copy_data_to_opencl_buffers() {
 }
 
 void create_opencl_program_from_source(){
-    fprintf(stderr, "[INFO] Creating kernel program from kernel source\n");
+    verbose_printf( "[INFO] Creating kernel program from kernel source\n");
 
     program = clCreateProgramWithSource(context, 1, (const char **) &source_str, (const size_t *) &source_size, &ret);
     assert(ret == CL_SUCCESS);
@@ -431,14 +445,14 @@ void create_opencl_program_from_source(){
 
 void build_opencl_program(){
 
-    fprintf(stderr, "\n---------------- Kernel build ----------------\n\n");
+    verbose_printf( "\n---------------- Kernel build ----------------\n\n");
 
-    fprintf(stderr, "[INFO] Building kernel program\n");
+    verbose_printf( "[INFO] Building kernel program\n");
 
     ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
     if (ret != CL_SUCCESS){
 
-        fprintf(stderr, "[ERROR] Build error:\n");
+        printf( "[ERROR] Build error:\n");
 
         clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
         if((build_log = malloc(sizeof(char)*log_size)) == NULL){
@@ -453,13 +467,13 @@ void build_opencl_program(){
         free(build_log);
         exit(1);
     } else {
-        fprintf(stderr, "[INFO] Build successful\n");
+        verbose_printf( "[INFO] Build successful\n");
     }
 
 }
 
 void create_opencl_kernel() {
-    fprintf(stderr, "[INFO] Creating OpenCl kernel\n");
+    verbose_printf( "[INFO] Creating OpenCl kernel\n");
     kernel = clCreateKernel(program, "serpent_encrypt", &ret);
     assert(ret == CL_SUCCESS);
 }
@@ -467,9 +481,9 @@ void create_opencl_kernel() {
 
 void set_kernel_parameters() {
 
-    fprintf(stderr, "\n---------------- Kernel parameters ----------------\n\n");
+    verbose_printf( "\n---------------- Kernel parameters ----------------\n\n");
     
-    fprintf(stderr, "[INFO] Setting kernel arguments (0) \n");
+    verbose_printf( "[INFO] Setting kernel arguments (0) \n");
     ret = clSetKernelArg(
         kernel, //Kernel object
         0, // kernel parameter index
@@ -477,7 +491,7 @@ void set_kernel_parameters() {
         (void *) &memobj0); // pointer of data used as the argument
     assert(ret == CL_SUCCESS);
 
-    fprintf(stderr, "[INFO] Setting kernel arguments (1) \n");
+    verbose_printf( "[INFO] Setting kernel arguments (1) \n");
     ret = clSetKernelArg(
         kernel, //Kernel object
         1, // kernel parameter index
@@ -485,7 +499,7 @@ void set_kernel_parameters() {
         (void *) &memobj1); // pointer of data used as the argument
     assert(ret == CL_SUCCESS);
 
-    fprintf(stderr, "[INFO] Setting kernel arguments (2) \n");
+    verbose_printf( "[INFO] Setting kernel arguments (2) \n");
     ret = clSetKernelArg(
         kernel, //Kernel object
         2, // kernel parameter index
@@ -497,9 +511,9 @@ void set_kernel_parameters() {
 
 void enqueue_opencl_kernel(){
 
-    fprintf(stderr, "\n---------------- Enqueue kernel task ----------------\n\n");
+    verbose_printf( "\n---------------- Enqueue kernel task ----------------\n\n");
 
-    fprintf(stderr, "[INFO] Executing opencl kernel (enqueue task)\n");
+    verbose_printf( "[INFO] Executing opencl kernel (enqueue task)\n");
     ret = clEnqueueNDRangeKernel(
         command_queue,
         kernel,
@@ -523,10 +537,10 @@ void wait_opencl_finish_exec(){
 
 void copy_results_from_opencl_buffer(){
 
-    fprintf(stderr, "\n---------------- Reading output buffers ----------------\n\n");
+    verbose_printf( "\n---------------- Reading output buffers ----------------\n\n");
     
     /* Copy results from the memory buffer */
-    fprintf(stderr, "[INFO] Copying results from memory buffer (ciphertext)\n");
+    verbose_printf( "[INFO] Copying results from memory buffer (ciphertext)\n");
     ret = clEnqueueReadBuffer(
         command_queue,
         memobj2,
@@ -552,11 +566,11 @@ void copy_results_from_opencl_buffer(){
 
 void get_opencl_performance_time() {
 
-    fprintf(stderr, "\n---------------- Performance evaluation ----------------\n\n");
+    printf( "\n---------------- Performance evaluation ----------------\n\n");
 
     clWaitForEvents(1 , &startEvent);
 
-    printf("[INFO] Getting start time\n");
+    verbose_printf("[INFO] Getting start time\n");
     ret = clGetEventProfilingInfo(
         startEvent,                              // the event object to get info for
         CL_PROFILING_COMMAND_START,         // the profiling data to query
@@ -566,7 +580,7 @@ void get_opencl_performance_time() {
     );
     assert(ret == CL_SUCCESS);
 
-    printf("[INFO] Getting end time\n");
+    verbose_printf("[INFO] Getting end time\n");
     ret = clGetEventProfilingInfo(
         startEvent,                              // the event object to get info for
         CL_PROFILING_COMMAND_END,         // the profiling data to query
@@ -581,7 +595,7 @@ void get_opencl_performance_time() {
 
 void release_opencl_resources() {
     
-    fprintf(stderr, "\n[INFO] Flushing and releasing buffers\n");
+    verbose_printf( "\n[INFO] Flushing and releasing buffers\n");
     ret = clFlush(command_queue);
     ret = clFinish(command_queue);
     ret = clReleaseKernel(kernel);
@@ -598,24 +612,26 @@ void release_opencl_resources() {
 void print_performance_speed(){
     float speed = (((float) (BLOCK_SIZE_IN_BYTES*num_encrypt_blocks))/executionTime);
 
-    printf("[PERF] Speed: %.2f B/s\n", speed);
+    printf("[PERF] Speed: %.2f B/s  ", speed);
 
     if (speed/1073741824.0 >= 1.0){
-        printf("[PERF]     * Conversion: %.2f GiB/s\n", speed/1073741824.0);
+        printf("( %.2f GiB/s )\n", speed/1073741824.0);
     } else if (speed/1048576.0 >= 1.0){ //it's Over 9000!!!!
-        printf("[PERF]     * Conversion: %.2f MiB/s\n", speed/1048576.0);
+        printf("( %.2f MiB/s )\n", speed/1048576.0);
     } else if (speed/1024.0 >= 1.0){
-        printf("[PERF]     * Conversion: %.2f kiB/s\n", speed/1024.0);
+        printf("( %.2f kiB/s )\n", speed/1024.0);
     } 
+
+    printf("\n");
 }
 
 void print_performance_time() {
-    printf("[PERF] Start time: %lu\n", (long unsigned int) startTime);
-    printf("[PERF] End time  : %lu\n", (long unsigned int) endTime);
+    if (verbose) printf("[PERF] Start time: %lu\n", (long unsigned int) startTime);
+    if (verbose) printf("[PERF] End time  : %lu\n", (long unsigned int) endTime);
 
     executionTime = ((float) (endTime-startTime))*0.000000001;
 
-    printf("[PERF] Execution time: %e\n", executionTime);
+    printf("[PERF] Execution time: %e seconds\n", executionTime);
 
     printf("[PERF] Encrypted data: %d Bytes\n", BLOCK_SIZE_IN_BYTES*num_encrypt_blocks);
 }
@@ -718,7 +734,7 @@ int main(int argc, char **argv){
     copy_results_from_opencl_buffer();
 
     if(memcmp(cipher2, correct, BLOCK_SIZE_IN_BYTES*num_encrypt_blocks) == 0)
-        printf("\n[SUCCESS] Output ciphertext is correct!\n\n");
+        verbose_printf("\n[SUCCESS] Output ciphertext is correct!\n\n");
     else {
         /* Check if ciphertext is correct */
         for(k=0; k<(num_encrypt_blocks); k++){
