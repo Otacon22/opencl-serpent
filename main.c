@@ -41,6 +41,7 @@ size_t log_size;
 char *build_log;
 
 int verbose = 0;
+int csv_output = 0;
 
 /* Optarg stuff */
 static const struct option long_options[] = {
@@ -48,11 +49,13 @@ static const struct option long_options[] = {
     { "verbose",        no_argument,         NULL, 'v' },
     { "num-work-items",        required_argument,        NULL, 'w' },
     { "num-blocks-for-work-item",        required_argument,        NULL, 'b' },
+    { "csv-output",        no_argument,        NULL, 'c' },
     { 0, 0, 0, 0 }
 };
-char *args_string = "hvw:b:";
+char *args_string = "hvcw:b:";
 int option_index = 0;
 
+float speed;
 
 
 unsigned char _correct[BLOCK_SIZE_IN_BYTES] = {0xEA,0x02,0x47,0x14,0xAD,0x5C,0x4D,0x84,0xEA,0x02,0x47,0x14,0xAD,0x5C,0x4D,0x84};
@@ -108,12 +111,17 @@ void verbose_printf(char *str){
     }
 }
 
+void csv_header_print(){
+    printf("num_work_items,num_encrypt_blocks_for_work_item,total_blocks_size,execution_time,encrypted_data,speed_byte_per_sec\n");
+}
+
 void print_usage(char **argv){
     printf("OpenCL serpent\nUsage: %s [-options]\n\n", argv[0]);
     printf("\t-h --help\t\t\t\t: Print this usage\n");
     printf("\t-v --verbose\t\t\t\t: Verbose version\n");
     printf("\t-w NUM --num-work-items NUM\t\t: Specify number of work-items (default: 2048)\n");
     printf("\t-b NUM --num-blocks-for-work-item NUM\t: Specify number of blocks encrypted by each work-item (default: 10000)\n");
+    printf("\t-c --csv-output\t\t\t\t: Print CSV-like output on stdout\n");
     printf("\n");
     exit(0);
 }
@@ -136,6 +144,9 @@ void parse_arguments(int argc, char **argv){
             case 'b':
                 num_encrypt_blocks_for_work_item = atoi(optarg);
                 break;
+            case 'c':
+                csv_output = 1;
+                break;
         }
     } while (c != -1);
 
@@ -154,8 +165,12 @@ void calculate_experiment_parameters(){
     mem_size_key = 132*sizeof(uint32_t);
 }
 
-void print_experiment_size_parameters(){
+void csv_print_experiment_size_parameters(){
+    printf("%d,%d,%d", num_work_items, num_encrypt_blocks_for_work_item, total_blocks_size);
+}
 
+void print_experiment_size_parameters(){
+    if (!csv_output){
         printf("\n---------------- Experiment parameters ----------------\n\n");
 
         printf("[INFO] Key size: %d bit\n", keyLen);
@@ -163,7 +178,7 @@ void print_experiment_size_parameters(){
         printf("[INFO] Number of work-items: %d\n", num_work_items);
         printf("[INFO] Number of blocks to encrypt for work item: %d\n", num_encrypt_blocks_for_work_item);
         if (verbose) printf("[INFO] Total number of blocks to encrypt with given parameters: %d blocks\n", total_blocks_size);
-
+    }
 }
 
 
@@ -565,9 +580,9 @@ void copy_results_from_opencl_buffer(){
 }
 
 void get_opencl_performance_time() {
-
-    printf( "\n---------------- Performance evaluation ----------------\n\n");
-
+    if (!csv_output){
+        printf( "\n---------------- Performance evaluation ----------------\n\n");
+    }
     clWaitForEvents(1 , &startEvent);
 
     verbose_printf("[INFO] Getting start time\n");
@@ -610,19 +625,21 @@ void release_opencl_resources() {
 }
 
 void print_performance_speed(){
-    float speed = (((float) (BLOCK_SIZE_IN_BYTES*num_encrypt_blocks))/executionTime);
+    speed = (((float) (BLOCK_SIZE_IN_BYTES*num_encrypt_blocks))/executionTime);
 
-    printf("[PERF] Speed: %.2f B/s  ", speed);
+    if (!csv_output){
+        printf("[PERF] Speed: %.2f B/s  ", speed);
 
-    if (speed/1073741824.0 >= 1.0){
-        printf("( %.2f GiB/s )\n", speed/1073741824.0);
-    } else if (speed/1048576.0 >= 1.0){ //it's Over 9000!!!!
-        printf("( %.2f MiB/s )\n", speed/1048576.0);
-    } else if (speed/1024.0 >= 1.0){
-        printf("( %.2f kiB/s )\n", speed/1024.0);
-    } 
+        if (speed/1073741824.0 >= 1.0){
+            printf("( %.2f GiB/s )\n", speed/1073741824.0);
+        } else if (speed/1048576.0 >= 1.0){ //it's Over 9000!!!!
+            printf("( %.2f MiB/s )\n", speed/1048576.0);
+        } else if (speed/1024.0 >= 1.0){
+            printf("( %.2f kiB/s )\n", speed/1024.0);
+        } 
 
-    printf("\n");
+        printf("\n");
+    }
 }
 
 void print_performance_time() {
@@ -631,11 +648,16 @@ void print_performance_time() {
 
     executionTime = ((float) (endTime-startTime))*0.000000001;
 
-    printf("[PERF] Execution time: %e seconds\n", executionTime);
+    if (!csv_output){
+        printf("[PERF] Execution time: %e seconds\n", executionTime);
 
-    printf("[PERF] Encrypted data: %d Bytes\n", BLOCK_SIZE_IN_BYTES*num_encrypt_blocks);
+        printf("[PERF] Encrypted data: %d Bytes\n", BLOCK_SIZE_IN_BYTES*num_encrypt_blocks);
+    }
 }
 
+void csv_print_performance() {
+    printf(",%.4f,%d,%.4f\n", executionTime, BLOCK_SIZE_IN_BYTES*num_encrypt_blocks, speed);
+}
 
 
 
@@ -680,7 +702,11 @@ int main(int argc, char **argv){
 
     calculate_experiment_parameters();
 
+    if (csv_output) csv_header_print();
+
     print_experiment_size_parameters();
+
+    if (csv_output) csv_print_experiment_size_parameters();
 
     /* Print and save some device-specific informations about this video card */
     get_and_print_device_info();
@@ -759,6 +785,8 @@ int main(int argc, char **argv){
 
     /* Print calculated speed */
     print_performance_speed();
+
+    if (csv_output) csv_print_performance();
 
     /* Release buffers and stuff */
     release_opencl_resources();
