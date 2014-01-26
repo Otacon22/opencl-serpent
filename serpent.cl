@@ -1,4 +1,4 @@
-#include "serpentdefs.h"
+
 
 #define RND00(a,b,c,d,w,x,y,z) \
         t01 = b   ^ c  ; \
@@ -587,6 +587,13 @@
     x3 = y3;\
     keying(x0, x1, x2, x3, subkeys[32])
 
+
+
+
+
+
+
+typedef unsigned int    uint32_t;
 
 __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintext, __global uint32_t *ciphertext)
 {

@@ -6,7 +6,7 @@
 #include "serpentdefs.h"
 
 
-
+typedef unsigned int    uint32_t;
 
 cl_device_id device_id = NULL;
 cl_context context = NULL;
@@ -28,7 +28,7 @@ FILE *fp;
 char fileName[] = "./serpent.cl";
 //    char fileName[] = "./check.cl";
 char *source_str;
-size_t source_size;
+size_t source_size = 0;
 size_t log_size;
 char *build_log;
 
@@ -37,20 +37,12 @@ unsigned char _plain[BLOCK_SIZE_IN_BYTES] = {0xBE,0xB6,0xC0,0x69,0x39,0x38,0x22,
 unsigned char _key[BLOCK_SIZE_IN_BYTES] = {0x2B,0xD6,0x45,0x9F,0x82,0xC5,0xB3,0x00,0x95,0x2C,0x49,0x10,0x48,0x81,0xFF,0x48};
 unsigned char _cipher[BLOCK_SIZE_IN_BYTES] = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 
-/*
-uint32_t correct[TOTAL_BLOCKS_SIZE];
-uint32_t plain[TOTAL_BLOCKS_SIZE];
-uint32_t key[TOTAL_BLOCKS_SIZE];
-uint32_t cipher[TOTAL_BLOCKS_SIZE];
-uint32_t cipher2[TOTAL_BLOCKS_SIZE];
-*/
 
 uint32_t *correct;
 uint32_t *plain;
 uint32_t key[BLOCK_SIZE_IN_32BIT_WORDS];
 uint32_t *cipher;
 uint32_t *cipher2;
-
 
 
 uint32_t w[132];
@@ -72,12 +64,33 @@ cl_event startEvent;
 
 cl_uint workDimensions;
 size_t global_work_size;
-size_t local_work_size[1] = {1};
+size_t local_work_size;
+
+
+size_t num_work_items;
+size_t num_encrypt_blocks_for_work_item;
+
+size_t num_encrypt_blocks;
+
+size_t total_blocks_size;   //4 32-bit words is the normal block. We want 10*32 blocks.
+size_t mem_size;
+size_t mem_size_key;
+
+
+void experiment_size_declarations(){
+    num_work_items = 2048;
+    num_encrypt_blocks_for_work_item = 10000;
+
+    num_encrypt_blocks = num_work_items * num_encrypt_blocks_for_work_item;
+    total_blocks_size = BLOCK_SIZE_IN_32BIT_WORDS * num_encrypt_blocks;
+    mem_size = sizeof(uint32_t) * total_blocks_size;
+    mem_size_key = 132*sizeof(uint32_t);
+}
 
 
 void check_needed_size(){
-    size_t required_on_video_card = (MEM_SIZE * 2)+(132*4);
-    size_t required_on_host = required_on_video_card + (MEM_SIZE * 2);
+    size_t required_on_video_card = (mem_size * 2)+(132*4);
+    size_t required_on_host = required_on_video_card + (mem_size * 2);
 
     printf("[INFO] Memory required on video card: %d Bytes (%.2f MiB) \n", required_on_video_card, required_on_video_card/1048576.0);
     if (required_on_video_card >= globalMemorySize){
@@ -88,19 +101,19 @@ void check_needed_size(){
 }
 
 void allocate_data_buffers(){
-    if ((plain = malloc(MEM_SIZE)) == NULL){
+    if ((plain = malloc(mem_size)) == NULL){
         printf("Memory error\n");
         exit(1);
     }
-    if ((correct = malloc(MEM_SIZE)) == NULL){
+    if ((correct = malloc(mem_size)) == NULL){
         printf("Memory error\n");
         exit(1);
     }
-    if ((cipher = malloc(MEM_SIZE)) == NULL){
+    if ((cipher = malloc(mem_size)) == NULL){
         printf("Memory error\n");
         exit(1);
     }
-    if ((cipher2 = malloc(MEM_SIZE)) == NULL){
+    if ((cipher2 = malloc(mem_size)) == NULL){
         printf("Memory error\n");
         exit(1);
     }
@@ -110,7 +123,7 @@ void replicate_original_data_to_new_buffers(){
     int k;
 
     memcpy(key, _key, BLOCK_SIZE_IN_BYTES);
-    for(k=0; k<(NUM_ENCRYPT_BLOCKS);k++){
+    for(k=0; k<(num_encrypt_blocks);k++){
         memcpy(&(plain[k*BLOCK_SIZE_IN_32BIT_WORDS]), _plain, BLOCK_SIZE_IN_BYTES);
         memcpy(&(cipher[k*BLOCK_SIZE_IN_32BIT_WORDS]), _cipher, BLOCK_SIZE_IN_BYTES);
         memcpy(&(correct[k*BLOCK_SIZE_IN_32BIT_WORDS]), _correct, BLOCK_SIZE_IN_BYTES);
@@ -119,6 +132,7 @@ void replicate_original_data_to_new_buffers(){
 }
 
 void load_kernel_source_code(){
+    int wrote = 0;
 
     if (!(fp = fopen(fileName, "r"))) {
 	fprintf(stderr, "[ERR] Failed to load kernel from file %s\n", fileName);
@@ -126,10 +140,15 @@ void load_kernel_source_code(){
     } else {
         fprintf(stderr, "[INFO] Kernel file loaded from file %s\n", fileName);
     }
-    source_str = (char *) malloc(MAX_SOURCE_SIZE+100); //+100 is for appending DEFINE of num work items
+    source_str = (char *) malloc(MAX_SOURCE_SIZE+(200*sizeof(char))); //+100 is for safely appending DEFINE of num work items
 
-    source_size = fread(source_str, 1, MAX_SOURCE_SIZE, fp);
+    wrote = sprintf(source_str, "\n#define NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM %d \r\n", num_encrypt_blocks_for_work_item);
+    source_size += wrote;
+
+    source_size += fread((source_str+wrote), 1, MAX_SOURCE_SIZE, fp);
+
     fclose(fp);
+
 }
 
 void get_and_print_device_info(){
@@ -204,7 +223,7 @@ void create_opencl_memory_buffers(){
     memobj0 = clCreateBuffer(
         context,
         CL_MEM_READ_ONLY, // Memory in Read only mode
-        MEM_SIZE_KEY,
+        mem_size_key,
         NULL,
         &ret);
     assert(ret == CL_SUCCESS);
@@ -213,7 +232,7 @@ void create_opencl_memory_buffers(){
     memobj1 = clCreateBuffer(
         context,
         CL_MEM_READ_ONLY, // Memory in Read only mode
-        MEM_SIZE,
+        mem_size,
         NULL,
         &ret);
     assert(ret == CL_SUCCESS);
@@ -222,7 +241,7 @@ void create_opencl_memory_buffers(){
     memobj2 = clCreateBuffer(
         context,
         CL_MEM_READ_WRITE, // Memory in R/W mode
-        MEM_SIZE,
+        mem_size,
         NULL,
         &ret);
     assert(ret == CL_SUCCESS);
@@ -284,33 +303,33 @@ void copy_data_to_opencl_buffers() {
         memobj0,
         CL_TRUE,
         0,
-        MEM_SIZE_KEY,
+        mem_size_key,
         w,
         0,
         NULL,
         NULL);
     assert(ret == CL_SUCCESS);
 
-    fprintf(stderr, "[INFO] Copying into memory buffer (plain) - Size: %d Bytes \n", MEM_SIZE);
+    fprintf(stderr, "[INFO] Copying into memory buffer (plain) - Size: %d Bytes \n", mem_size);
     ret = clEnqueueWriteBuffer(
         command_queue,
         memobj1,
         CL_TRUE,
         0,
-        MEM_SIZE,
+        mem_size,
         plain,
         0,
         NULL,
         NULL);
     assert(ret == CL_SUCCESS);
 
-    fprintf(stderr, "[INFO] Copying into memory buffer (clean cipher (full of zeroes)) - Size: %d Bytes \n", MEM_SIZE);
+    fprintf(stderr, "[INFO] Copying into memory buffer (clean cipher (full of zeroes)) - Size: %d Bytes \n", mem_size);
     ret = clEnqueueWriteBuffer(
         command_queue,
         memobj2,
         CL_TRUE,
         0,
-        MEM_SIZE,
+        mem_size,
         cipher,
         0,
         NULL,
@@ -416,7 +435,7 @@ void copy_results_from_opencl_buffer(){
         memobj2,
         CL_TRUE, //Blocking operation (wait finish)
         0,
-        MEM_SIZE,
+        mem_size,
         cipher2, //output pointer
         0,
         NULL,
@@ -478,7 +497,7 @@ void release_opencl_resources() {
 }
 
 void print_perf_speed(){
-    float speed = (((float) (BLOCK_SIZE_IN_BYTES*NUM_ENCRYPT_BLOCKS))/executionTime);
+    float speed = (((float) (BLOCK_SIZE_IN_BYTES*num_encrypt_blocks))/executionTime);
 
     printf("[PERF] Speed: %.2f B/s\n", speed);
 
@@ -525,9 +544,12 @@ void print_perf_speed(){
 
 
 
-int main()
-{
+int main(int argc, char **argv){
+
     int k;
+
+    /*Initialize work value (number of work items, number of blocks for work-item... end so on)*/
+    experiment_size_declarations();
 
     /* Print and save some device-specific informations about this video card */
     get_and_print_device_info();
@@ -569,7 +591,7 @@ int main()
 
     /* Execute OpenCL Kernel */
     workDimensions      = 1;
-    global_work_size    = NUM_WORK_ITEMS;
+    global_work_size    = num_work_items;
     //local_work_size[1]  = 1; //????
     //local_work_size = NULL;
     enqueue_opencl_kernel();
@@ -580,11 +602,11 @@ int main()
     /* Copy results from output buffer (ciphertext) */
     copy_results_from_opencl_buffer();
 
-    if(memcmp(cipher2, correct, BLOCK_SIZE_IN_BYTES*NUM_ENCRYPT_BLOCKS) == 0)
+    if(memcmp(cipher2, correct, BLOCK_SIZE_IN_BYTES*num_encrypt_blocks) == 0)
         printf("\n[SUCCESS] Output ciphertext is correct!\n\n");
     else {
         /* Check if ciphertext is correct */
-        for(k=0; k<(NUM_ENCRYPT_BLOCKS); k++){
+        for(k=0; k<(num_encrypt_blocks); k++){
             if(!(memcmp(
                     &(cipher2[k*BLOCK_SIZE_IN_32BIT_WORDS]),
                     &(correct[k*BLOCK_SIZE_IN_32BIT_WORDS]),
@@ -617,7 +639,7 @@ int main()
 
     printf("[PERF] Execution time: %e\n", executionTime);
 
-    printf("[PERF] Encrypted data: %d Bytes\n", BLOCK_SIZE_IN_BYTES*NUM_ENCRYPT_BLOCKS);
+    printf("[PERF] Encrypted data: %d Bytes\n", BLOCK_SIZE_IN_BYTES*num_encrypt_blocks);
 
     /* Print calculated speed */
     print_perf_speed();
