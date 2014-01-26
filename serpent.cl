@@ -613,6 +613,7 @@
 
 
 typedef unsigned int    uint32_t;
+typedef unsigned long   uint64_t;
 
 __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintext, __global uint32_t *ciphertext)
 {
@@ -635,7 +636,8 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
         We copy the pre-processed key from the global memory.
         It's a long operation but it's done just one by each work item
      */
-    copy_pre_processed_key(w,_w); 
+    copy_pre_processed_key(w,_w);  //unrolled version
+    //for (u=0; u<132; u++){ w[u] = _w[u];}    //loop version
 
     //barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
 
