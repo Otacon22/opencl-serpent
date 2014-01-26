@@ -3,10 +3,17 @@
 #include <assert.h>
 #include <string.h>
 #include <CL/cl.h>
-#include "serpentdefs.h"
+#include <stdint.h>
 
 
-typedef unsigned int    uint32_t;
+#define MAX_SOURCE_SIZE (0x100000)
+
+#define BLOCK_SIZE_IN_BYTES 16
+#define BLOCK_SIZE_IN_32BIT_WORDS 4
+
+
+typedef unsigned char   BYTE;
+
 
 cl_device_id device_id = NULL;
 cl_context context = NULL;
@@ -66,6 +73,8 @@ cl_uint workDimensions;
 size_t global_work_size;
 size_t local_work_size;
 
+
+uint32_t keyLen = 128;
 
 size_t num_work_items;
 size_t num_encrypt_blocks_for_work_item;
