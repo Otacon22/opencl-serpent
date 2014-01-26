@@ -177,7 +177,7 @@ void print_experiment_size_parameters(){
         printf("[INFO] Block size: %d Byte\n", BLOCK_SIZE_IN_BYTES);
         printf("[INFO] Number of work-items: %d\n", num_work_items);
         printf("[INFO] Number of blocks to encrypt for work item: %d\n", num_encrypt_blocks_for_work_item);
-        if (verbose) printf("[INFO] Total number of blocks to encrypt with given parameters: %d blocks\n", total_blocks_size);
+        if (verbose) printf("[INFO] Total number of blocks to encrypt with given parameters: %d blocks\n", num_encrypt_blocks);
     }
 }
 

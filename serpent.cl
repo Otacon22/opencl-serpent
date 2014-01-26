@@ -476,7 +476,7 @@
 
 #define GENSUBKEY(i) subkeys[i][0] = k[4*i];subkeys[i][1] = k[4*i+1];subkeys[i][2] = k[4*i+2];subkeys[i][3] = k[4*i+3]
 
-#define gensubkey_operations() \
+#define gensubkey_operations_unrolled() \
     GENSUBKEY(0);GENSUBKEY(1);GENSUBKEY(2);GENSUBKEY(3);GENSUBKEY(4);GENSUBKEY(5);\
     GENSUBKEY(6);GENSUBKEY(7);GENSUBKEY(8);GENSUBKEY(9);GENSUBKEY(10);GENSUBKEY(11);\
     GENSUBKEY(12);GENSUBKEY(13);GENSUBKEY(14);GENSUBKEY(15);GENSUBKEY(16);GENSUBKEY(17);\
@@ -587,38 +587,60 @@
     x3 = y3;\
     keying(x0, x1, x2, x3, subkeys[32])
 
+/* This might be useful for unrolling the for loop */
+#define OPERATION \
+        x0 = plaintext[j]; \
+        x1 = plaintext[j+1];\
+        x2 = plaintext[j+2];\
+        x3 = plaintext[j+3];\
+        barrier(CLK_LOCAL_MEM_FENCE);\
+        round_operations(w,k);\
+        gensubkey_operations();\
+        keying_round_transf(x0,x1,x2,x3,y0,y1,y2,y3,subkeys);\
+        ciphertext[j] = x0;\
+        ciphertext[j+1] = x1;\
+        ciphertext[j+2] = x2;\
+        ciphertext[j+3] = x3;\
+        barrier(CLK_LOCAL_MEM_FENCE);\
+        j += num_work_items*4;\
+        i++
 
+#define OPERATION_10    OPERATION;OPERATION;OPERATION;OPERATION;OPERATION;\
+    OPERATION;OPERATION;OPERATION;OPERATION;OPERATION
 
-
-
+#define OPERATION_100   OPERATION_10;OPERATION_10;OPERATION_10;OPERATION_10;OPERATION_10;\
+    OPERATION_10;OPERATION_10;OPERATION_10;OPERATION_10;OPERATION_10
 
 
 typedef unsigned int    uint32_t;
 
 __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintext, __global uint32_t *ciphertext)
 {
-    /* Stuff used by function for encryption functions. Must be private */
+    /* Stuff used by function for encryption functions. */
     __private uint32_t t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18;
     __private uint32_t x0, x1, x2, x3; 
     __private uint32_t y0, y1, y2, y3;
     __private uint32_t k[132];
     __private uint32_t subkeys[33][4];
-    __private int i=0, j=0;
+    __private int i=0, j=0, u=0;
 
-    __local uint32_t w[132];
+    __private uint32_t w[132];
 
     size_t num_work_items = get_global_size(0); // get number of work items for dimension 1
     size_t kernel_id = get_global_id(0); // get work item id
     
 
 
-    /* Copying pre-processed key from global to local */
-    copy_pre_processed_key(w,_w);
+    /* Copying pre-processed key from global to local
+        We copy the pre-processed key from the global memory.
+        It's a long operation but it's done just one by each work item
+     */
+    copy_pre_processed_key(w,_w); 
 
-    // barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
+    //barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
 
     j = kernel_id*4;
-    for (;i < NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM; i++){
+    for (;i != NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM;){
         
         /* Copying plaintext from global to private */
         x0 = plaintext[j]; 
@@ -630,8 +652,15 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
             
         /* Doing the actual work */
         round_operations(w,k);                                //Read only w, write k.
-        gensubkey_operations();                               //Read k, write subkeys
+
+
+        //Read k, write subkeys
+        for (u=0; u<=32; u++){ GENSUBKEY(u);}   // Loop version
+        //gensubkey_operations_unrolled();      // Unrolled version of the above
+
         keying_round_transf(x0,x1,x2,x3,y0,y1,y2,y3,subkeys); //Read subkeys, write others
+
+        barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
       
         /* Copying ciphertext from private to global memory */
         ciphertext[j] = x0;
@@ -642,6 +671,9 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
         barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
         
         j += num_work_items*4;
+
+        i++;
+
     }
 }
 
