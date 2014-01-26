@@ -4,6 +4,7 @@
 #include <string.h>
 #include <CL/cl.h>
 #include <stdint.h>
+#include <getopt.h>
 
 
 #define MAX_SOURCE_SIZE (0x100000)
@@ -38,6 +39,20 @@ char *source_str;
 size_t source_size = 0;
 size_t log_size;
 char *build_log;
+
+
+/* Optarg stuff */
+static const struct option long_options[] = {
+    { "help",         no_argument,         NULL, 'h' },
+    { "verbose",        no_argument,         NULL, 'v' },
+    { "num-work-items",        required_argument,        NULL, 'w' },
+    { "num-blocks-for-work-item",        required_argument,        NULL, 'b' },
+    { 0, 0, 0, 0 }
+};
+char *args_string = "hvw:b:";
+int option_index = 0;
+
+
 
 unsigned char _correct[BLOCK_SIZE_IN_BYTES] = {0xEA,0x02,0x47,0x14,0xAD,0x5C,0x4D,0x84,0xEA,0x02,0x47,0x14,0xAD,0x5C,0x4D,0x84};
 unsigned char _plain[BLOCK_SIZE_IN_BYTES] = {0xBE,0xB6,0xC0,0x69,0x39,0x38,0x22,0xD3,0xBE,0x73,0xFF,0x30,0x52,0x5E,0xC4,0x3E};
@@ -86,15 +101,50 @@ size_t mem_size;
 size_t mem_size_key;
 
 
-void experiment_size_declarations(){
+void print_usage(char **argv){
+    printf("OpenCL serpent\nUsage: %s [-options]\n\n", argv[0]);
+    printf("\t-h --help\t\t\t\t: Print this usage\n");
+    printf("\t-v --verbose\t\t\t\t: Verbose version\n");
+    printf("\t-w NUM --num-work-items NUM\t\t: Specify number of work-items (default: 2048)\n");
+    printf("\t-b NUM --num-blocks-for-work-item NUM\t: Specify number of blocks encrypted by each work-item (default: 10000)\n");
+    printf("\n");
+    exit(0);
+}
+
+void parse_arguments(int argc, char **argv){
+    int c;
+
+    do {
+        c = getopt_long(argc, argv, args_string, long_options, &option_index);
+        switch(c) {
+            case 'h':
+                print_usage(argv);
+                break;
+            case 'v':
+                break;
+            case 'w':
+                num_work_items = atoi(optarg);
+                break;
+            case 'b':
+                num_encrypt_blocks_for_work_item = atoi(optarg);
+                break;
+        }
+    } while (c != -1);
+
+}
+
+
+void experiment_size_default_declarations(){
     num_work_items = 2048;
     num_encrypt_blocks_for_work_item = 10000;
 
+}
+
+void calculate_experiment_parameters(){
     num_encrypt_blocks = num_work_items * num_encrypt_blocks_for_work_item;
     total_blocks_size = BLOCK_SIZE_IN_32BIT_WORDS * num_encrypt_blocks;
     mem_size = sizeof(uint32_t) * total_blocks_size;
     mem_size_key = 132*sizeof(uint32_t);
-
 }
 
 void print_experiment_size_parameters(){
@@ -608,7 +658,11 @@ int main(int argc, char **argv){
     int k;
 
     /*Initialize work value (number of work items, number of blocks for work-item... end so on)*/
-    experiment_size_declarations();
+    experiment_size_default_declarations();
+
+    parse_arguments(argc, argv);
+
+    calculate_experiment_parameters();
 
     print_experiment_size_parameters();
 
