@@ -152,7 +152,10 @@ void load_kernel_source_code(){
 }
 
 void get_and_print_device_info(){
+
     int i;
+
+    fprintf(stderr, "\n---------------- Device Informations ----------------\n\n");
 
     /* Get Platform and Device Info */
     fprintf(stderr, "[INFO] Getting platform ID\n");
@@ -205,6 +208,8 @@ void get_and_print_device_info(){
     assert(ret == CL_SUCCESS);
     printf("[INFO] Max work item dimensions: %u \n", (unsigned int) maxWorkItemDim);
 
+    //TODO: malloc maxWorkItem
+
     ret = clGetDeviceInfo(device_id,  CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(maxWorkItem), maxWorkItem, 0);
     assert(ret == CL_SUCCESS);
     for(i=1; i<=maxWorkItemDim; i++){
@@ -218,6 +223,8 @@ void get_and_print_device_info(){
 }
 
 void create_opencl_memory_buffers(){
+
+    fprintf(stderr, "\n---------------- Buffer creation ----------------\n\n");
 
     fprintf(stderr, "[INFO] Creating memory buffer (for key)\n");
     memobj0 = clCreateBuffer(
@@ -250,6 +257,8 @@ void create_opencl_memory_buffers(){
 
 void pre_compute_key(){
     int i;
+
+    fprintf(stderr, "\n---------------- Key pre-computation ----------------\n\n");
 
     printf("[INFO] Pre-computation of key\n");
 
@@ -296,6 +305,8 @@ void pre_compute_key(){
 
 
 void copy_data_to_opencl_buffers() {
+
+    fprintf(stderr, "\n---------------- Buffer copy ----------------\n\n");
 
     fprintf(stderr, "[INFO] Copying into memory buffer (key)\n");
     ret = clEnqueueWriteBuffer(
@@ -347,10 +358,15 @@ void create_opencl_program_from_source(){
 
 
 void build_opencl_program(){
+
+    fprintf(stderr, "\n---------------- Kernel build ----------------\n\n");
+
     fprintf(stderr, "[INFO] Building kernel program\n");
 
     ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
     if (ret != CL_SUCCESS){
+
+        fprintf(stderr, "[ERROR] Build error:\n");
 
         clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
         if((build_log = malloc(sizeof(char)*log_size)) == NULL){
@@ -364,6 +380,8 @@ void build_opencl_program(){
 
         free(build_log);
         exit(1);
+    } else {
+        fprintf(stderr, "[INFO] Build successful\n");
     }
 
 }
@@ -376,6 +394,8 @@ void create_opencl_kernel() {
 
 
 void set_kernel_parameters() {
+
+    fprintf(stderr, "\n---------------- Kernel parameters ----------------\n\n");
     
     fprintf(stderr, "[INFO] Setting kernel arguments (0) \n");
     ret = clSetKernelArg(
@@ -405,6 +425,8 @@ void set_kernel_parameters() {
 
 void enqueue_opencl_kernel(){
 
+    fprintf(stderr, "\n---------------- Enqueue kernel task ----------------\n\n");
+
     fprintf(stderr, "[INFO] Executing opencl kernel (enqueue task)\n");
     ret = clEnqueueNDRangeKernel(
         command_queue,
@@ -428,6 +450,9 @@ void wait_opencl_finish_exec(){
 }
 
 void copy_results_from_opencl_buffer(){
+
+    fprintf(stderr, "\n---------------- Reading output buffers ----------------\n\n");
+    
     /* Copy results from the memory buffer */
     fprintf(stderr, "[INFO] Copying results from memory buffer (ciphertext)\n");
     ret = clEnqueueReadBuffer(
@@ -454,6 +479,8 @@ void copy_results_from_opencl_buffer(){
 }
 
 void get_opencl_performance_time() {
+
+    fprintf(stderr, "\n---------------- Performance evaluation ----------------\n\n");
 
     clWaitForEvents(1 , &startEvent);
 
@@ -482,7 +509,7 @@ void get_opencl_performance_time() {
 
 void release_opencl_resources() {
     
-    fprintf(stderr, "[INFO] Flushing and releasing buffers\n");
+    fprintf(stderr, "\n[INFO] Flushing and releasing buffers\n");
     ret = clFlush(command_queue);
     ret = clFinish(command_queue);
     ret = clReleaseKernel(kernel);
@@ -496,7 +523,7 @@ void release_opencl_resources() {
     free(source_str);
 }
 
-void print_perf_speed(){
+void print_performance_speed(){
     float speed = (((float) (BLOCK_SIZE_IN_BYTES*num_encrypt_blocks))/executionTime);
 
     printf("[PERF] Speed: %.2f B/s\n", speed);
@@ -510,6 +537,16 @@ void print_perf_speed(){
     } 
 }
 
+void print_performance_time() {
+    printf("[PERF] Start time: %lu\n", (long unsigned int) startTime);
+    printf("[PERF] End time  : %lu\n", (long unsigned int) endTime);
+
+    executionTime = ((float) (endTime-startTime))*0.000000001;
+
+    printf("[PERF] Execution time: %e\n", executionTime);
+
+    printf("[PERF] Encrypted data: %d Bytes\n", BLOCK_SIZE_IN_BYTES*num_encrypt_blocks);
+}
 
 
 
@@ -621,28 +658,13 @@ int main(int argc, char **argv){
 
 
 
-
-    /* Print result 
-    printf("[OUTPUT] Result: ");
- 
-    for (k=BLOCK_SIZE_IN_BYTES*9; k < BLOCK_SIZE_IN_BYTES*12; k++){
-        printf("%02hhx", ((char *) cipher2)[k]);
-    }
-    printf("\n");*/
-
     get_opencl_performance_time();
+
+    print_performance_time();
     
-    printf("[PERF] Start time: %lu\n", (long unsigned int) startTime);
-    printf("[PERF] End time  : %lu\n", (long unsigned int) endTime);
-
-    executionTime = ((float) (endTime-startTime))*0.000000001;
-
-    printf("[PERF] Execution time: %e\n", executionTime);
-
-    printf("[PERF] Encrypted data: %d Bytes\n", BLOCK_SIZE_IN_BYTES*num_encrypt_blocks);
 
     /* Print calculated speed */
-    print_perf_speed();
+    print_performance_speed();
 
     /* Release buffers and stuff */
     release_opencl_resources();
