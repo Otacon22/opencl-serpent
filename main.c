@@ -436,6 +436,8 @@ void copy_results_from_opencl_buffer(){
 
 void get_opencl_performance_time() {
 
+    clWaitForEvents(1 , &startEvent);
+
     printf("[INFO] Getting start time\n");
     ret = clGetEventProfilingInfo(
         startEvent,                              // the event object to get info for
