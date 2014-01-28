@@ -1,3 +1,6 @@
+
+#define _BSD_SOURCE 2
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -5,7 +8,6 @@
 #include <CL/cl.h>
 #include <stdint.h>
 #include <getopt.h>
-
 
 
 #define MAX_SOURCE_SIZE (0x100000)
@@ -46,7 +48,7 @@ size_t source_size = 0;
 size_t log_size;
 char *build_log;
 char *build_args;
-char *default_build_args = "-cl-fast-relaxed-math -Werror";
+char *default_build_args = "-Werror";
 
 int verbose = 0;
 int csv_output = 0;
@@ -122,6 +124,9 @@ size_t mem_size_key;
 size_t program_size;
 char **program_binary;
 
+size_t num_instructions = 0;
+float instructions_per_byte;
+
 
 void verbose_printf(char *str){
     if(verbose){
@@ -130,7 +135,7 @@ void verbose_printf(char *str){
 }
 
 void csv_header_print(){
-    printf("num_work_items,num_work_items_in_work_group,num_encrypt_blocks_for_work_item,total_blocks_size,execution_time,encrypted_data,speed_byte_per_sec\n");
+    printf("num_work_items,num_work_items_in_work_group,num_encrypt_blocks_for_work_item,total_blocks_size,instructions_per_byte,execution_time,encrypted_data,speed_byte_per_sec\n");
 }
 
 void print_usage(char **argv){
@@ -532,8 +537,10 @@ void build_opencl_program(){
 
 void save_opencl_binaries() {
     cl_uint program_count;
-    FILE *fd;
+    FILE *fd, *fd_popen;
     size_t written = 0;
+    char *commandstr;
+    char *cmdout;
 
     verbose_printf("[INFO] Getting number of programs generated\n");
     ret = clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &program_count, NULL);
@@ -574,7 +581,32 @@ void save_opencl_binaries() {
         exit(1);
     }
     fclose(fd);
+
+    if ((commandstr = malloc(sizeof(char)*(300))) == NULL){ //TODO change 300 to define value
+        printf("Memory error\n");
+        exit(1);
+    }
     
+    sprintf(commandstr, "python -c \"print len(open('%s','r').read().split(' bra')[0].split('BB0_1:')[1].split('\\n'))\" | tr -d '\\n'", binary_dump_file);
+    
+    //if (verbose) {printf("[INFO] Executing command: %s\n", commandstr);}    
+
+    fd_popen = (FILE *) popen(commandstr,"r");
+
+    if ((cmdout = malloc(sizeof(char)*200)) == NULL){ //TODO change 200 to define value
+        printf("Memory error\n");
+        exit(1);
+    }
+
+    written = fread(cmdout, sizeof(char), 200, fd_popen);
+    cmdout[written] = '\0';
+
+    pclose(fd_popen);
+
+    num_instructions = atoi(cmdout);
+
+    if (verbose) {printf("[INFO] Number of instructions of the main loop body: %d\n", num_instructions);}
+
 
 }
 
@@ -744,6 +776,16 @@ void csv_print_performance() {
     printf(",%.4f,%d,%.4f\n", executionTime, BLOCK_SIZE_IN_BYTES*num_encrypt_blocks, speed);
 }
 
+void print_instructions_per_byte() {
+
+    instructions_per_byte = ((float) num_instructions*num_work_items*num_encrypt_blocks_for_work_item) / ((num_work_items*mem_size_key)+(num_work_items*num_encrypt_blocks_for_work_item*2*BLOCK_SIZE_IN_BYTES));
+
+    if (verbose) { printf("[PERF] Instructions per byte: %.2f [Instructions/Byte]\n", instructions_per_byte); }
+}
+
+void csv_print_instructions_per_byte(){
+    printf(",%.2f", instructions_per_byte);
+}
 
 
 
@@ -871,12 +913,18 @@ int main(int argc, char **argv){
     get_opencl_performance_time();
 
     print_performance_time();
-    
+
+    print_instructions_per_byte();
 
     /* Print calculated speed */
     print_performance_speed();
 
-    if (csv_output) csv_print_performance();
+    if (csv_output) {
+        csv_print_instructions_per_byte();
+        csv_print_performance();
+    }
+
+
 
     /* Release buffers and stuff */
     release_opencl_resources();
