@@ -10,6 +10,8 @@
 
 #define MAX_SOURCE_SIZE (0x100000)
 
+#define MAX_BUILD_ARG_LENGTH 500
+
 #define BLOCK_SIZE_IN_BYTES 16
 #define BLOCK_SIZE_IN_32BIT_WORDS 4
 
@@ -458,7 +460,7 @@ void build_opencl_program(){
 
     verbose_printf( "[INFO] Building kernel program\n");
 
-    if ((build_args = malloc(sizeof(char)*500)) == NULL){ //500 is the max length of build arguments
+    if ((build_args = malloc(sizeof(char)*MAX_BUILD_ARG_LENGTH)) == NULL){ //MAX_BUILD_ARG_LENGTH is the max length of build arguments
         printf("Memory error\n");
         exit(1);
     }
