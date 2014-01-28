@@ -195,7 +195,7 @@ void print_experiment_size_parameters(){
 
 
 void check_needed_size(){
-    size_t required_on_video_card = (mem_size * 2)+(132*4);
+    size_t required_on_video_card = (mem_size)+(132*4);
     size_t required_on_host = required_on_video_card + (mem_size * 2);
 
     if(verbose){
@@ -212,6 +212,7 @@ void check_needed_size(){
 }
 
 void allocate_data_buffers(){
+    verbose_printf("[INFO] Allocation of buffers on host memory");
     if ((plain = malloc(mem_size)) == NULL){
         printf("Memory error\n");
         exit(1);
@@ -220,23 +221,16 @@ void allocate_data_buffers(){
         printf("Memory error\n");
         exit(1);
     }
-    if ((cipher = malloc(mem_size)) == NULL){
-        printf("Memory error\n");
-        exit(1);
-    }
-    if ((cipher2 = malloc(mem_size)) == NULL){
-        printf("Memory error\n");
-        exit(1);
-    }
 }
 
 void replicate_original_data_to_new_buffers(){
     int k;
 
+    verbose_printf("Replicating the original data over all the generated buffers\n");
     memcpy(key, _key, BLOCK_SIZE_IN_BYTES);
     for(k=0; k<(num_encrypt_blocks);k++){
         memcpy(&(plain[k*BLOCK_SIZE_IN_32BIT_WORDS]), _plain, BLOCK_SIZE_IN_BYTES);
-        memcpy(&(cipher[k*BLOCK_SIZE_IN_32BIT_WORDS]), _cipher, BLOCK_SIZE_IN_BYTES);
+        //memcpy(&(cipher[k*BLOCK_SIZE_IN_32BIT_WORDS]), _cipher, BLOCK_SIZE_IN_BYTES); // Not used anymore
         memcpy(&(correct[k*BLOCK_SIZE_IN_32BIT_WORDS]), _correct, BLOCK_SIZE_IN_BYTES);
     }
 
@@ -447,19 +441,6 @@ void copy_data_to_opencl_buffers() {
         NULL);
     assert(ret == CL_SUCCESS);
 
-    if(verbose) printf( "[INFO] Copying into memory buffer (clean cipher (full of zeroes)) - Size: %d Bytes \n", mem_size);
-    ret = clEnqueueWriteBuffer(
-        command_queue,
-        memobj2,
-        CL_TRUE,
-        0,
-        mem_size,
-        cipher,
-        0,
-        NULL,
-        NULL);
-    assert(ret == CL_SUCCESS);
-
 }
 
 void create_opencl_program_from_source(){
@@ -615,7 +596,7 @@ void copy_results_from_opencl_buffer(){
         CL_TRUE, //Blocking operation (wait finish)
         0,
         mem_size,
-        cipher2, //output pointer
+        plain, //output pointer
         0,
         NULL,
         NULL
@@ -815,14 +796,16 @@ int main(int argc, char **argv){
 
     /* Copy results from output buffer (ciphertext) */
     copy_results_from_opencl_buffer();
+    cipher = plain; //We write the output again in the same array used for the plaintext
+                    // (the size is the same). This assignement is just to be clear in next instructions
 
-    if(memcmp(cipher2, correct, BLOCK_SIZE_IN_BYTES*num_encrypt_blocks) == 0)
+    if(memcmp(cipher, correct, BLOCK_SIZE_IN_BYTES*num_encrypt_blocks) == 0)
         verbose_printf("\n[SUCCESS] Output ciphertext is correct!\n\n");
     else {
         /* Check if ciphertext is correct */
         for(k=0; k<(num_encrypt_blocks); k++){
             if(!(memcmp(
-                    &(cipher2[k*BLOCK_SIZE_IN_32BIT_WORDS]),
+                    &(cipher[k*BLOCK_SIZE_IN_32BIT_WORDS]),
                     &(correct[k*BLOCK_SIZE_IN_32BIT_WORDS]),
                     BLOCK_SIZE_IN_BYTES
                     ) == 0)){
