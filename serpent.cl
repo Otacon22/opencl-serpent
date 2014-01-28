@@ -642,21 +642,32 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
 
     //barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
 
-    j = kernel_id*4;
+    j = kernel_id * 4;
     for (;i != NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM;){
 
 #ifdef UNROLL_MAIN_LOOP
         /* Unrolled version of the entire for cycle */       
         OPERATION_10; 
 #else
+
+    #ifdef CTR_MODE
+        //Given j, the 128-bit block number is j/4
+        /*
+            x0 = j/4;
+            x1 = 0;
+            x2 = 0;
+            x3 = 0;
+        */
+
+    #else
         /* Copying plaintext from global to private */
         x0 = plaintext[j]; 
         x1 = plaintext[j+1];
         x2 = plaintext[j+2];
         x3 = plaintext[j+3];
-
+    
         barrier(CLK_LOCAL_MEM_FENCE); //Needed?
-            
+    #endif
         /* Doing the actual work */
         round_operations(w,k);                                //Read only w, write k.
 
@@ -671,11 +682,19 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
 
         barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
       
+    #ifdef CTR_MODE
+        plaintext[j]   = x0 ^ plaintext[j];
+        plaintext[j+1] = x1 ^ plaintext[j+1];
+        plaintext[j+2] = x2 ^ plaintext[j+2];
+        plaintext[j+3] = x3 ^ plaintext[j+3];
+
+    #else
         /* Copying ciphertext from private to global memory */
         plaintext[j] = x0;
         plaintext[j+1] = x1;
         plaintext[j+2] = x2;
         plaintext[j+3] = x3;
+    #endif
 
         barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
         

@@ -64,6 +64,7 @@ static const struct option long_options[] = {
     { "num-work-items-per-work-group",  required_argument, NULL, 'g'},
     { "unroll-main-work-cycle",        no_argument,        NULL, 'u' },
     { "do-not-unroll-subkey-operation",        no_argument,        NULL, 's' },
+    { "ctr-mode", no_argument, NULL, 'r'},
     { 0, 0, 0, 0 }
 };
 char *args_string = "hvcw:b:d:g:us";
@@ -108,6 +109,7 @@ size_t local_work_size;
 
 int unroll_main_work_cycle;
 int unroll_subkey_operation;
+int counter_mode;
 
 uint32_t keyLen = 128;
 
@@ -147,7 +149,8 @@ void print_usage(char **argv){
     printf("\t-g NUM --num-work-items-per-work-group NUM\t: Specify number of work-items that compose a work-group (default 64)\n");
     printf("\t-b NUM --num-blocks-for-work-item NUM\t\t: Specify number of blocks encrypted by each work-item (default: 20000)\n");
     printf("\t-u --unroll-main-work-cycle\t\t\t: Unroll 10 iterations of the main kernel cycle\n");
-    printf("\t-s --do-not-unroll-subkey-operation\t\t\t: Do not unroll subkey operation\n");
+    printf("\t-s --do-not-unroll-subkey-operation\t\t: Do not unroll subkey operation\n");
+    printf("\t-r --ctr-mode\t\t\t\t\t: Enable Counter Mode (default: ECB mode)\n");
     printf("\t-c --csv-output\t\t\t\t\t: Print CSV-like output on stdout\n");
     printf("\n");
     exit(0);
@@ -186,6 +189,9 @@ void parse_arguments(int argc, char **argv){
             case 's':
                 unroll_subkey_operation = 0;
                 break;
+            case 'r':
+                counter_mode = 1;
+                break;
         }
     } while (c != -1);
 
@@ -198,6 +204,7 @@ void experiment_size_default_declarations(){
     num_encrypt_blocks_for_work_item = 20000;
     unroll_main_work_cycle = 0;
     unroll_subkey_operation = 1;
+    counter_mode = 0;
 }
 
 void calculate_experiment_parameters(){
@@ -508,6 +515,10 @@ void build_opencl_program(){
     
     if (unroll_subkey_operation) {
         wrote += sprintf(build_args+wrote, " -DUNROLL_GENSUBKEY");
+    }
+
+    if (counter_mode) {
+        wrote += sprintf(build_args+wrote, " -DCTR_MODE");
     }
 
     
@@ -835,7 +846,7 @@ int main(int argc, char **argv){
 
     int k;
 
-    /*Initialize work value (number of work items, number of blocks for work-item... end so on)*/
+    /*Initialize work value (number of work items, number of blocks for work-item... and so on)*/
     experiment_size_default_declarations();
 
     parse_arguments(argc, argv);
