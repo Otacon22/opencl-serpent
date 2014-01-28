@@ -43,6 +43,8 @@ char *source_str;
 size_t source_size = 0;
 size_t log_size;
 char *build_log;
+char *build_args;
+char *default_build_args = "-cl-fast-relaxed-math -Werror";
 
 int verbose = 0;
 int csv_output = 0;
@@ -237,7 +239,6 @@ void replicate_original_data_to_new_buffers(){
 }
 
 void load_kernel_source_code(){
-    int wrote = 0;
 
     if (!(fp = fopen(fileName, "r"))) {
 	    printf("[ERR] Failed to load kernel from file %s\n", fileName);
@@ -245,12 +246,12 @@ void load_kernel_source_code(){
     } else {
         if(verbose){printf( "[INFO] Kernel file loaded from file %s\n", fileName);}
     }
-    source_str = (char *) malloc(MAX_SOURCE_SIZE+(200*sizeof(char))); //+100 is for safely appending DEFINE of num work items
+    if ((source_str = (char *) malloc(MAX_SOURCE_SIZE)) == NULL) {
+        printf("Memory error\n");
+        exit(1);
+    }
 
-    wrote = sprintf(source_str, "\n#define NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM %d \r\n", num_encrypt_blocks_for_work_item);
-    source_size += wrote;
-
-    source_size += fread((source_str+wrote), 1, MAX_SOURCE_SIZE, fp);
+    source_size += fread(source_str, 1, MAX_SOURCE_SIZE, fp);
 
     fclose(fp);
 
@@ -457,7 +458,15 @@ void build_opencl_program(){
 
     verbose_printf( "[INFO] Building kernel program\n");
 
-    ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
+    if ((build_args = malloc(sizeof(char)*500)) == NULL){ //500 is the max length of build arguments
+        printf("Memory error\n");
+        exit(1);
+    }
+
+    sprintf(build_args, "%s -DNUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM=%d", default_build_args,
+            num_encrypt_blocks_for_work_item);
+
+    ret = clBuildProgram(program, 1, &device_id, build_args, NULL, NULL);
     if (ret != CL_SUCCESS){
 
         printf( "[ERROR] Build error:\n");
