@@ -615,7 +615,7 @@
 typedef unsigned int    uint32_t;
 typedef unsigned long   uint64_t;
 
-__kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintext, __global uint32_t *ciphertext)
+__kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintext)
 {
     /* Stuff used by function for encryption functions. */
     __private uint32_t t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18;
@@ -665,10 +665,10 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
         barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
       
         /* Copying ciphertext from private to global memory */
-        ciphertext[j] = x0;
-        ciphertext[j+1] = x1;
-        ciphertext[j+2] = x2;
-        ciphertext[j+3] = x3;
+        plaintext[j] = x0;
+        plaintext[j+1] = x1;
+        plaintext[j+2] = x2;
+        plaintext[j+3] = x3;
 
         barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
         

@@ -7,6 +7,7 @@
 #include <getopt.h>
 
 
+
 #define MAX_SOURCE_SIZE (0x100000)
 
 #define BLOCK_SIZE_IN_BYTES 16
@@ -35,6 +36,9 @@ cl_mem memobj2 = NULL;
 FILE *fp;
 char fileName[] = "./serpent.cl";
 //    char fileName[] = "./check.cl";
+
+char *binary_dump_file = "binary-opencl.dump";
+
 char *source_str;
 size_t source_size = 0;
 size_t log_size;
@@ -50,9 +54,10 @@ static const struct option long_options[] = {
     { "num-work-items",        required_argument,        NULL, 'w' },
     { "num-blocks-for-work-item",        required_argument,        NULL, 'b' },
     { "csv-output",        no_argument,        NULL, 'c' },
+    { "dump-binary-file",   required_argument,  NULL, 'd' },
     { 0, 0, 0, 0 }
 };
-char *args_string = "hvcw:b:";
+char *args_string = "hvcw:b:d:";
 int option_index = 0;
 
 float speed;
@@ -104,6 +109,9 @@ size_t total_blocks_size;   //4 32-bit words is the normal block. We want 10*32 
 size_t mem_size;
 size_t mem_size_key;
 
+size_t program_size;
+char **program_binary;
+
 
 void verbose_printf(char *str){
     if(verbose){
@@ -119,6 +127,7 @@ void print_usage(char **argv){
     printf("OpenCL serpent\nUsage: %s [-options]\n\n", argv[0]);
     printf("\t-h --help\t\t\t\t: Print this usage\n");
     printf("\t-v --verbose\t\t\t\t: Verbose version\n");
+    printf("\t-d <file> --dump-binary-file <file>\t: Specify where to save the generated kernel binary code\n");
     printf("\t-w NUM --num-work-items NUM\t\t: Specify number of work-items (default: 2048)\n");
     printf("\t-b NUM --num-blocks-for-work-item NUM\t: Specify number of blocks encrypted by each work-item (default: 10000)\n");
     printf("\t-c --csv-output\t\t\t\t: Print CSV-like output on stdout\n");
@@ -146,6 +155,9 @@ void parse_arguments(int argc, char **argv){
                 break;
             case 'c':
                 csv_output = 1;
+                break;
+            case 'd':
+                binary_dump_file = optarg;
                 break;
         }
     } while (c != -1);
@@ -487,6 +499,54 @@ void build_opencl_program(){
 
 }
 
+void save_opencl_binaries() {
+    cl_uint program_count;
+    FILE *fd;
+    size_t written = 0;
+
+    verbose_printf("[INFO] Getting number of programs generated\n");
+    ret = clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &program_count, NULL);
+    assert(ret == CL_SUCCESS);
+    if (program_count != 1){
+        printf("[ERROR] The number of generated binary programs is different from 1. Was it Expected?\n");
+        exit(1);
+    }
+
+    if ((program_binary = (char**) malloc(sizeof(char*) * program_count)) == NULL){
+        printf("Memory error\n");
+    }
+
+
+
+    verbose_printf("[INFO] Getting size of generated binary code\n");
+    ret = clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t), &program_size, NULL);
+    assert(ret == CL_SUCCESS);
+
+    if ((program_binary[0] = (char*) malloc(sizeof(char) * (program_size+1))) == NULL) {
+        printf("Memory error\n");
+        exit(1);
+    }
+    
+    verbose_printf("[INFO] Getting program binary code\n");
+    ret = clGetProgramInfo(program, CL_PROGRAM_BINARIES, sizeof(char *), program_binary, NULL);
+    assert(ret == CL_SUCCESS);
+
+    if ((fd = fopen(binary_dump_file, "w")) == NULL) {
+        printf("[ERROR] Impossible to write binary dump file to %s file.\n", binary_dump_file);
+        exit(1);
+    }
+    
+    written = fwrite(program_binary[0], sizeof(char), program_size, fd);
+    if (written != program_size)
+    {
+        printf("[ERROR] Couldn't write the dump on file %s\n", binary_dump_file);
+        exit(1);
+    }
+    fclose(fd);
+    
+
+}
+
 void create_opencl_kernel() {
     verbose_printf( "[INFO] Creating OpenCl kernel\n");
     kernel = clCreateKernel(program, "serpent_encrypt", &ret);
@@ -514,13 +574,6 @@ void set_kernel_parameters() {
         (void *) &memobj1); // pointer of data used as the argument
     assert(ret == CL_SUCCESS);
 
-    verbose_printf( "[INFO] Setting kernel arguments (2) \n");
-    ret = clSetKernelArg(
-        kernel, //Kernel object
-        2, // kernel parameter index
-        sizeof(cl_mem), //size of argument data
-        (void *) &memobj2); // pointer of data used as the argument
-    assert(ret == CL_SUCCESS);
 
 }
 
@@ -555,10 +608,10 @@ void copy_results_from_opencl_buffer(){
     verbose_printf( "\n---------------- Reading output buffers ----------------\n\n");
     
     /* Copy results from the memory buffer */
-    verbose_printf( "[INFO] Copying results from memory buffer (ciphertext)\n");
+    verbose_printf( "[INFO] Copying results from memory buffer (encrypted cleartext)\n");
     ret = clEnqueueReadBuffer(
         command_queue,
-        memobj2,
+        memobj1,
         CL_TRUE, //Blocking operation (wait finish)
         0,
         mem_size,
@@ -622,6 +675,7 @@ void release_opencl_resources() {
     ret = clReleaseContext(context);
 
     free(source_str);
+    free(program_binary);
 }
 
 void print_performance_speed(){
@@ -739,6 +793,9 @@ int main(int argc, char **argv){
 
     /* Build Kernel Program */
     build_opencl_program();
+
+    /* Save binaries of the program */
+    save_opencl_binaries();
 
     /* Create OpenCL Kernel */
     create_opencl_kernel();
