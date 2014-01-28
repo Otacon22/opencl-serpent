@@ -607,6 +607,7 @@ void save_opencl_binaries() {
     for(i=0; cmdout[i] != '\0'; i++){
         if (!(cmdout[i]>='0' && cmdout[i]<='9')){
             verbose_printf("[SOFT-ERROR] It's not possibile to establish the number of instructions for this card!\n");
+            i=-1;
             num_instructions = 0;
             break;
         }
