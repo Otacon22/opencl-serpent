@@ -1,6 +1,6 @@
 #!/usr/bin/python
 import os
-from time import timep
+from time import time
 
 fd = open("performance_data"+str(int(time()))+".csv","w")
 

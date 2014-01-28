@@ -59,9 +59,10 @@ static const struct option long_options[] = {
     { "num-blocks-for-work-item",        required_argument,        NULL, 'b' },
     { "csv-output",        no_argument,        NULL, 'c' },
     { "dump-binary-file",   required_argument,  NULL, 'd' },
+    { "num-work-items-per-work-group",  required_argument, NULL, 'g'},
     { 0, 0, 0, 0 }
 };
-char *args_string = "hvcw:b:d:";
+char *args_string = "hvcw:b:d:g:";
 int option_index = 0;
 
 float speed;
@@ -105,6 +106,7 @@ size_t local_work_size;
 uint32_t keyLen = 128;
 
 size_t num_work_items;
+size_t num_work_items_in_work_group;
 size_t num_encrypt_blocks_for_work_item;
 
 size_t num_encrypt_blocks;
@@ -124,7 +126,7 @@ void verbose_printf(char *str){
 }
 
 void csv_header_print(){
-    printf("num_work_items,num_encrypt_blocks_for_work_item,total_blocks_size,execution_time,encrypted_data,speed_byte_per_sec\n");
+    printf("num_work_items,num_work_items_in_work_group,num_encrypt_blocks_for_work_item,total_blocks_size,execution_time,encrypted_data,speed_byte_per_sec\n");
 }
 
 void print_usage(char **argv){
@@ -133,6 +135,7 @@ void print_usage(char **argv){
     printf("\t-v --verbose\t\t\t\t: Verbose version\n");
     printf("\t-d <file> --dump-binary-file <file>\t: Specify where to save the generated kernel binary code\n");
     printf("\t-w NUM --num-work-items NUM\t\t: Specify number of work-items (default: 2048)\n");
+    printf("\t-g NUM --num-work-items-per-work-group NUM\t: Specify number of work-items that compose a work-group (default 64)\n");
     printf("\t-b NUM --num-blocks-for-work-item NUM\t: Specify number of blocks encrypted by each work-item (default: 10000)\n");
     printf("\t-c --csv-output\t\t\t\t: Print CSV-like output on stdout\n");
     printf("\n");
@@ -163,6 +166,9 @@ void parse_arguments(int argc, char **argv){
             case 'd':
                 binary_dump_file = optarg;
                 break;
+            case 'g':
+                num_work_items_in_work_group = atoi(optarg);
+                break;
         }
     } while (c != -1);
 
@@ -171,6 +177,7 @@ void parse_arguments(int argc, char **argv){
 
 void experiment_size_default_declarations(){
     num_work_items = 2048;
+    num_work_items_in_work_group = 64;
     num_encrypt_blocks_for_work_item = 10000;
 }
 
@@ -182,7 +189,7 @@ void calculate_experiment_parameters(){
 }
 
 void csv_print_experiment_size_parameters(){
-    printf("%d,%d,%d", num_work_items, num_encrypt_blocks_for_work_item, total_blocks_size);
+    printf("%d,%d,%d,%d", num_work_items, num_work_items_in_work_group, num_encrypt_blocks_for_work_item, total_blocks_size);
 }
 
 void print_experiment_size_parameters(){
@@ -192,6 +199,8 @@ void print_experiment_size_parameters(){
         printf("[INFO] Key size: %d bit\n", keyLen);
         printf("[INFO] Block size: %d Byte\n", BLOCK_SIZE_IN_BYTES);
         printf("[INFO] Number of work-items: %d\n", num_work_items);
+        printf("[INFO] Number of work-items in a work-group: %d\n", num_work_items_in_work_group);
+        printf("[INFO] Resulting number of work-groups: %.2f\n", ((float) num_work_items)/num_work_items_in_work_group);
         printf("[INFO] Number of blocks to encrypt for work item: %d\n", num_encrypt_blocks_for_work_item);
         if (verbose) printf("[INFO] Total number of blocks to encrypt with given parameters: %d blocks\n", num_encrypt_blocks);
     }
@@ -580,7 +589,7 @@ void enqueue_opencl_kernel(){
         workDimensions, //Number of dimensions (max = 3)
         NULL,
         &global_work_size, //array che indica il numero di work-items che eseguiranno questo kernel, per ciascuna dimensione dichiarata
-        NULL, //Numero di work-items che creano un work-group. Il totale e' calcolato come il prodotto degli elementi dell'array. Il singolo elemento dell'array fa riferimento al numero di work-item che crea un gruppo nella dimensione n. Il numero totale deve essere minore di CL_DEVICE_MAX_WORK_GROUP_SIZE.
+        &local_work_size, //Numero di work-items che creano un work-group. Il totale e' calcolato come il prodotto degli elementi dell'array. Il singolo elemento dell'array fa riferimento al numero di work-item che crea un gruppo nella dimensione n. Il numero totale deve essere minore di CL_DEVICE_MAX_WORK_GROUP_SIZE.
 //Inoltre i singoli elementi dell'array devono essere minori di CL_DEVICE_MAX_WORK_ITEM_SIZES[0]...[1]... Se e' NULL se ne occupa OpenCL di sceglierlo.
         0,
         NULL,
@@ -798,7 +807,7 @@ int main(int argc, char **argv){
     /* Execute OpenCL Kernel */
     workDimensions      = 1;
     global_work_size    = num_work_items;
-    //local_work_size[1]  = 1; //????
+    local_work_size     = num_work_items_in_work_group; //????
     //local_work_size = NULL;
     enqueue_opencl_kernel();
 
