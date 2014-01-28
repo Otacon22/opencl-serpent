@@ -92,7 +92,7 @@ cl_ulong globalCacheSize;
 cl_uint  computationUnits;
 char deviceVendor[200];
 cl_uint  maxWorkItemDim;
-size_t   maxWorkItem[10];
+size_t   *maxWorkItem;
 cl_uint  numberOfBits;
 size_t   maxWorkGroupSize;
 
@@ -339,12 +339,15 @@ void get_and_print_device_info(){
     assert(ret == CL_SUCCESS);
     if (verbose) printf("[INFO] Max work item dimensions: %u \n", (unsigned int) maxWorkItemDim);
 
-    //TODO: malloc maxWorkItem
+    if ((maxWorkItem = malloc(sizeof(size_t)*maxWorkItemDim)) == NULL){
+        printf("Memory error");
+        exit(1);
+    }
 
-    ret = clGetDeviceInfo(device_id,  CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(maxWorkItem), maxWorkItem, 0);
+    ret = clGetDeviceInfo(device_id,  CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(size_t)*maxWorkItemDim, maxWorkItem, 0);
     assert(ret == CL_SUCCESS);
     if (verbose) { 
-        for(i=1; i<=maxWorkItemDim; i++){
+        for(i=0; i<maxWorkItemDim; i++){
             printf("[INFO] Max number of work items for dimension %d: %u \n", i, maxWorkItem[i]);
         }
     }
