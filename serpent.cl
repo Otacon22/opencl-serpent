@@ -589,18 +589,19 @@
 
 /* This might be useful for unrolling the for loop */
 #define OPERATION \
-        x0 = plaintext[j]; \
+        x0 = plaintext[j];\
         x1 = plaintext[j+1];\
         x2 = plaintext[j+2];\
         x3 = plaintext[j+3];\
         barrier(CLK_LOCAL_MEM_FENCE);\
         round_operations(w,k);\
-        gensubkey_operations();\
+        gensubkey_operations_unrolled();\
         keying_round_transf(x0,x1,x2,x3,y0,y1,y2,y3,subkeys);\
-        ciphertext[j] = x0;\
-        ciphertext[j+1] = x1;\
-        ciphertext[j+2] = x2;\
-        ciphertext[j+3] = x3;\
+        barrier(CLK_LOCAL_MEM_FENCE);\
+        plaintext[j] = x0;\
+        plaintext[j+1] = x1;\
+        plaintext[j+2] = x2;\
+        plaintext[j+3] = x3;\
         barrier(CLK_LOCAL_MEM_FENCE);\
         j += num_work_items*4;\
         i++
@@ -643,7 +644,11 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
 
     j = kernel_id*4;
     for (;i != NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM;){
-        
+
+#ifdef UNROLL_MAIN_LOOP
+        /* Unrolled version of the entire for cycle */       
+        OPERATION_10; 
+#else
         /* Copying plaintext from global to private */
         x0 = plaintext[j]; 
         x1 = plaintext[j+1];
@@ -655,10 +660,12 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
         /* Doing the actual work */
         round_operations(w,k);                                //Read only w, write k.
 
-
         //Read k, write subkeys
+#ifdef UNROLL_GENSUBKEY
+        gensubkey_operations_unrolled();      // Unrolled version
+#else
         for (u=0; u<=32; u++){ GENSUBKEY(u);}   // Loop version
-        //gensubkey_operations_unrolled();      // Unrolled version of the above
+#endif
 
         keying_round_transf(x0,x1,x2,x3,y0,y1,y2,y3,subkeys); //Read subkeys, write others
 
@@ -675,6 +682,7 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
         j += num_work_items*4;
 
         i++;
+#endif
 
     }
 }

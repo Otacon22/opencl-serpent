@@ -60,9 +60,11 @@ static const struct option long_options[] = {
     { "csv-output",        no_argument,        NULL, 'c' },
     { "dump-binary-file",   required_argument,  NULL, 'd' },
     { "num-work-items-per-work-group",  required_argument, NULL, 'g'},
+    { "unroll-main-work-cycle",        no_argument,        NULL, 'u' },
+    { "do-not-unroll-subkey-operation",        no_argument,        NULL, 's' },
     { 0, 0, 0, 0 }
 };
-char *args_string = "hvcw:b:d:g:";
+char *args_string = "hvcw:b:d:g:us";
 int option_index = 0;
 
 float speed;
@@ -102,6 +104,8 @@ cl_uint workDimensions;
 size_t global_work_size;
 size_t local_work_size;
 
+int unroll_main_work_cycle;
+int unroll_subkey_operation;
 
 uint32_t keyLen = 128;
 
@@ -131,13 +135,15 @@ void csv_header_print(){
 
 void print_usage(char **argv){
     printf("OpenCL serpent\nUsage: %s [-options]\n\n", argv[0]);
-    printf("\t-h --help\t\t\t\t: Print this usage\n");
-    printf("\t-v --verbose\t\t\t\t: Verbose version\n");
-    printf("\t-d <file> --dump-binary-file <file>\t: Specify where to save the generated kernel binary code\n");
-    printf("\t-w NUM --num-work-items NUM\t\t: Specify number of work-items (default: 2048)\n");
+    printf("\t-h --help\t\t\t\t\t: Print this usage\n");
+    printf("\t-v --verbose\t\t\t\t\t: Verbose version\n");
+    printf("\t-d <file> --dump-binary-file <file>\t\t: Specify where to save the generated kernel binary code\n");
+    printf("\t-w NUM --num-work-items NUM\t\t\t: Specify number of work-items (default: 2048)\n");
     printf("\t-g NUM --num-work-items-per-work-group NUM\t: Specify number of work-items that compose a work-group (default 64)\n");
-    printf("\t-b NUM --num-blocks-for-work-item NUM\t: Specify number of blocks encrypted by each work-item (default: 10000)\n");
-    printf("\t-c --csv-output\t\t\t\t: Print CSV-like output on stdout\n");
+    printf("\t-b NUM --num-blocks-for-work-item NUM\t\t: Specify number of blocks encrypted by each work-item (default: 10000)\n");
+    printf("\t-u --unroll-main-work-cycle\t\t\t: Unroll 10 iterations of the main kernel cycle\n");
+    printf("\t-s --do-not-unroll-subkey-operation\t\t\t: Do not unroll subkey operation\n");
+    printf("\t-c --csv-output\t\t\t\t\t: Print CSV-like output on stdout\n");
     printf("\n");
     exit(0);
 }
@@ -169,6 +175,12 @@ void parse_arguments(int argc, char **argv){
             case 'g':
                 num_work_items_in_work_group = atoi(optarg);
                 break;
+            case 'u':
+                unroll_main_work_cycle = 1;
+                break;
+            case 's':
+                unroll_subkey_operation = 0;
+                break;
         }
     } while (c != -1);
 
@@ -179,6 +191,8 @@ void experiment_size_default_declarations(){
     num_work_items = 2048;
     num_work_items_in_work_group = 64;
     num_encrypt_blocks_for_work_item = 10000;
+    unroll_main_work_cycle = 0;
+    unroll_subkey_operation = 1;
 }
 
 void calculate_experiment_parameters(){
@@ -465,6 +479,8 @@ void create_opencl_program_from_source(){
 
 void build_opencl_program(){
 
+    int wrote = 0;
+
     verbose_printf( "\n---------------- Kernel build ----------------\n\n");
 
     verbose_printf( "[INFO] Building kernel program\n");
@@ -474,9 +490,19 @@ void build_opencl_program(){
         exit(1);
     }
 
-    sprintf(build_args, "%s -DNUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM=%d", default_build_args,
+    wrote += sprintf(build_args, "%s -DNUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM=%d", default_build_args,
             num_encrypt_blocks_for_work_item);
 
+    if (unroll_main_work_cycle) {
+        wrote += sprintf(build_args+wrote, " -DUNROLL_MAIN_LOOP");
+    }
+    
+    if (unroll_subkey_operation) {
+        wrote += sprintf(build_args+wrote, " -DUNROLL_GENSUBKEY");
+    }
+
+    
+    if(verbose) { printf("[INFO] Building using the following build arguments: %s\n", build_args); }
     ret = clBuildProgram(program, 1, &device_id, build_args, NULL, NULL);
     if (ret != CL_SUCCESS){
 
