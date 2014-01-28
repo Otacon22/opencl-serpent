@@ -541,6 +541,7 @@ void save_opencl_binaries() {
     size_t written = 0;
     char *commandstr;
     char *cmdout;
+    int i = 0;
 
     verbose_printf("[INFO] Getting number of programs generated\n");
     ret = clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &program_count, NULL);
@@ -598,14 +599,25 @@ void save_opencl_binaries() {
         exit(1);
     }
 
-    written = fread(cmdout, sizeof(char), 200, fd_popen);
+    written = fread(cmdout, sizeof(char), 200, fd_popen); //TODO
     cmdout[written] = '\0';
 
     pclose(fd_popen);
 
-    num_instructions = atoi(cmdout);
+    for(i=0; cmdout[i] != '\0'; i++){
+        if (!(cmdout[i]>='0' && cmdout[i]<='9')){
+            verbose_printf("[SOFT-ERROR] It's not possibile to establish the number of instructions for this card!\n");
+            num_instructions = 0;
+            break;
+        }
+    }
 
-    if (verbose) {printf("[INFO] Number of instructions of the main loop body: %d\n", num_instructions);}
+
+    if (i != -1){
+        num_instructions = atoi(cmdout);
+
+        if (verbose) {printf("[INFO] Number of instructions of the main loop body: %d\n", num_instructions);}
+    }
 
 
 }
