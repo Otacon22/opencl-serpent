@@ -1,5 +1,6 @@
 
 #define _BSD_SOURCE 2
+#define _GNU_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -330,8 +331,10 @@ void get_and_print_device_info(){
     if (verbose) printf("[INFO] Device vendor: %s\n", deviceVendor);
 
     if (strcasestr(deviceVendor,"nvidia") != NULL) {
+        verbose_printf("[INFO] Nvidia card detected\n");
         nvidia = 1;
     } else if (strcasestr(deviceVendor,"advanced micro devices") != NULL) {
+        verbose_printf("[INFO] ATI card detected\n");
         ati = 1;
     }
 
