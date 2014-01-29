@@ -699,7 +699,7 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
         plaintext[j+3] = x3;
     #endif
 
-        //barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
+        barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
         
         j += num_work_items*4;
 
