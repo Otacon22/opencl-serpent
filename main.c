@@ -82,7 +82,6 @@ uint32_t *correct;
 uint32_t *plain;
 uint32_t key[BLOCK_SIZE_IN_32BIT_WORDS];
 uint32_t *cipher;
-uint32_t *cipher2;
 
 
 uint32_t w[132];
@@ -234,7 +233,7 @@ void print_experiment_size_parameters(){
 
 
 void check_needed_size(){
-    size_t required_on_video_card = (mem_size)+(132*4);
+    size_t required_on_video_card = (mem_size) + mem_size_key;
     size_t required_on_host = required_on_video_card + (mem_size * 2);
 
     if(verbose){
@@ -334,11 +333,11 @@ void get_and_print_device_info(){
     /* Print Local memory size */
     ret = clGetDeviceInfo(device_id, CL_DEVICE_LOCAL_MEM_SIZE, sizeof(cl_ulong), &localMemorySize, 0);    
     assert(ret == CL_SUCCESS);
-    if (verbose) printf("[INFO] Local Memory size: %lu Bytes\n", (long unsigned int) localMemorySize);
+    if (verbose) printf("[INFO] Local Memory size: %lu Bytes (%.2f kiB)\n", (long unsigned int) localMemorySize, ((float) localMemorySize)/1024.0);
 
     ret = clGetDeviceInfo(device_id, CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(cl_ulong), &globalMemorySize, 0);
     assert(ret == CL_SUCCESS);
-    if (verbose) printf("[INFO] Global Memory size: %lu Bytes (%.2f MiB)\n", (long unsigned int) globalMemorySize, ((float) globalMemorySize)/1048576);
+    if (verbose) printf("[INFO] Global Memory size: %lu Bytes (%.2f MiB)\n", (long unsigned int) globalMemorySize, ((float) globalMemorySize)/1048576.0);
 
     ret = clGetDeviceInfo(device_id, CL_DEVICE_GLOBAL_MEM_CACHE_SIZE, sizeof(cl_ulong), &globalCacheSize, 0);
     assert(ret == CL_SUCCESS);
@@ -391,6 +390,31 @@ void create_opencl_memory_buffers(){
         mem_size,
         NULL,
         &ret);
+    if (ret != CL_SUCCESS){
+        switch (ret) {
+            case CL_INVALID_CONTEXT:
+                printf("[ERROR] The context is not valid\n");
+                break;
+            case CL_INVALID_VALUE:
+                printf("[ERROR] The value in cl_mem_flag is not valid\n");
+                break;
+            case CL_INVALID_BUFFER_SIZE:
+                printf("[ERROR] The buffer size is 0 (zero) or exceeds the range supported by the compute devices associated with the context.\n");
+                break;
+            case CL_INVALID_HOST_PTR:
+                printf("[ERROR] The host_ptr is NULL, but CL_MEM_USE_HOST_PTR, CL_MEM_COPY_HOST_PTR, and CL_MEM_ALLOC_HOST_PTR are set; or host_ptr is not NULL, but the CL_MEM_USE_HOST_PTR, CL_MEM_COPY_HOST_PTR, and CL_MEM_ALLOC_HOST_PTR are not set.\n");
+                break;
+            case CL_INVALID_OBJECT_ALLOCATION_FAILURE:
+                printf("[ERROR] Unable to allocate memory for the memory object\n");
+                break;
+            case CL_OUT_OF_HOST_MEMORY:
+                printf("[ERROR] The host is unable to allocate OpenCL resources\n");
+                break;
+            default:
+                printf("[ERROR] Unknown clCreateBuffer error: %d\n", ret);
+                break;
+        }
+    }
     assert(ret == CL_SUCCESS);
 
 }
@@ -778,7 +802,7 @@ void print_performance_time() {
     if (verbose) printf("[PERF] Start time: %lu\n", (long unsigned int) startTime);
     if (verbose) printf("[PERF] End time  : %lu\n", (long unsigned int) endTime);
 
-    executionTime = ((float) (endTime-startTime))*0.000000001;
+    executionTime = ((float) (endTime - startTime))*0.000000001;
 
     if (!csv_output){
         printf("[PERF] Execution time: %e seconds\n", executionTime);
