@@ -383,7 +383,7 @@ void create_opencl_memory_buffers(){
         &ret);
     assert(ret == CL_SUCCESS);
 
-    verbose_printf( "[INFO] Creating memory buffer (for plaintext)\n");
+    if (verbose) { printf( "[INFO] Creating memory buffer (for plaintext) - Size %lu Bytes\n", mem_size); }
     memobj1 = clCreateBuffer(
         context,
         CL_MEM_READ_WRITE, // R/W because we use this buffer both for reading plaintext and for writing ciphertext.
