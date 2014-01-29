@@ -404,9 +404,9 @@ void create_opencl_memory_buffers(){
             case CL_INVALID_HOST_PTR:
                 printf("[ERROR] The host_ptr is NULL, but CL_MEM_USE_HOST_PTR, CL_MEM_COPY_HOST_PTR, and CL_MEM_ALLOC_HOST_PTR are set; or host_ptr is not NULL, but the CL_MEM_USE_HOST_PTR, CL_MEM_COPY_HOST_PTR, and CL_MEM_ALLOC_HOST_PTR are not set.\n");
                 break;
-            case CL_INVALID_OBJECT_ALLOCATION_FAILURE:
+            /*case CL_INVALID_OBJECT_ALLOCATION_FAILURE:
                 printf("[ERROR] Unable to allocate memory for the memory object\n");
-                break;
+                break;*/
             case CL_OUT_OF_HOST_MEMORY:
                 printf("[ERROR] The host is unable to allocate OpenCL resources\n");
                 break;
