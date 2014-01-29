@@ -653,10 +653,10 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
     #ifdef CTR_MODE
         //Given j, the 128-bit block number is j/4
         /*
-            x0 = j/4;
+            x0 = 0;
             x1 = 0;
             x2 = 0;
-            x3 = 0;
+            x3 = j/4;
         */
 
     #else
@@ -696,7 +696,7 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
         plaintext[j+3] = x3;
     #endif
 
-        barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
+        //barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
         
         j += num_work_items*4;
 
