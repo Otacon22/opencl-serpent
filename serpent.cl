@@ -669,7 +669,7 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
         x2 = plaintext[j+2];
         x3 = plaintext[j+3];
     
-        barrier(CLK_LOCAL_MEM_FENCE); //Needed?
+        //barrier(CLK_LOCAL_MEM_FENCE); //Needed?
     #endif
         /* Doing the actual work */
         round_operations(w,k);                                //Read only w, write k.
@@ -683,7 +683,7 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
 
         keying_round_transf(x0,x1,x2,x3,y0,y1,y2,y3,subkeys); //Read subkeys, write others
 
-        barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
+        //barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
       
     #ifdef CTR_MODE
         plaintext[j]   = x0 ^ plaintext[j];
@@ -699,7 +699,7 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
         plaintext[j+3] = x3;
     #endif
 
-        barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
+        //barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
         
         j += num_work_items*4;
 
