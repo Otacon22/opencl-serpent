@@ -33,7 +33,6 @@ cl_int ret;
 
 cl_mem memobj0 = NULL;
 cl_mem memobj1 = NULL;
-cl_mem memobj2 = NULL; 
 
 //size_t workGroupSize;
 
@@ -216,7 +215,7 @@ void calculate_experiment_parameters(){
 }
 
 void csv_print_experiment_size_parameters(){
-    printf("%d,%d,%d,%d", num_work_items, num_work_items_in_work_group, num_encrypt_blocks_for_work_item, total_blocks_size);
+    printf("%u,%u,%u,%u", num_work_items, num_work_items_in_work_group, num_encrypt_blocks_for_work_item, total_blocks_size);
 }
 
 void print_experiment_size_parameters(){
@@ -225,11 +224,11 @@ void print_experiment_size_parameters(){
 
         printf("[INFO] Key size: %d bit\n", keyLen);
         printf("[INFO] Block size: %d Byte\n", BLOCK_SIZE_IN_BYTES);
-        printf("[INFO] Number of work-items: %d\n", num_work_items);
-        printf("[INFO] Number of work-items in a work-group: %d\n", num_work_items_in_work_group);
+        printf("[INFO] Number of work-items: %u\n", num_work_items);
+        printf("[INFO] Number of work-items in a work-group: %u\n", num_work_items_in_work_group);
         printf("[INFO] Resulting number of work-groups: %.2f\n", ((float) num_work_items)/num_work_items_in_work_group);
-        printf("[INFO] Number of blocks to encrypt for work item: %d\n", num_encrypt_blocks_for_work_item);
-        if (verbose) printf("[INFO] Total number of blocks to encrypt with given parameters: %d blocks\n", num_encrypt_blocks);
+        printf("[INFO] Number of blocks to encrypt for work item: %u\n", num_encrypt_blocks_for_work_item);
+        if (verbose) printf("[INFO] Total number of blocks to encrypt with given parameters: %u blocks\n", num_encrypt_blocks);
     }
 }
 
@@ -239,7 +238,7 @@ void check_needed_size(){
     size_t required_on_host = required_on_video_card + (mem_size * 2);
 
     if(verbose){
-        printf("[INFO] Memory required on video card: %d Bytes (%.2f MiB) \n", required_on_video_card, required_on_video_card/1048576.0);
+        printf("[INFO] Memory required on video card: %u Bytes (%.2f MiB) \n", required_on_video_card, required_on_video_card/1048576.0);
     }
     if (required_on_video_card >= globalMemorySize){
         printf("[ERROR] Requested memory is larger than the avalable memory on the video card!\n");
@@ -388,16 +387,7 @@ void create_opencl_memory_buffers(){
     verbose_printf( "[INFO] Creating memory buffer (for plaintext)\n");
     memobj1 = clCreateBuffer(
         context,
-        CL_MEM_READ_ONLY, // Memory in Read only mode
-        mem_size,
-        NULL,
-        &ret);
-    assert(ret == CL_SUCCESS);
-
-    verbose_printf( "[INFO] Creating memory buffer (for ciphertext)\n");
-    memobj2 = clCreateBuffer(
-        context,
-        CL_MEM_READ_WRITE, // Memory in R/W mode
+        CL_MEM_READ_WRITE, // R/W because we use this buffer both for reading plaintext and for writing ciphertext.
         mem_size,
         NULL,
         &ret);
@@ -759,7 +749,6 @@ void release_opencl_resources() {
     ret = clReleaseProgram(program);
     ret = clReleaseMemObject(memobj0);
     ret = clReleaseMemObject(memobj1);
-    ret = clReleaseMemObject(memobj2);
     ret = clReleaseCommandQueue(command_queue);
     ret = clReleaseContext(context);
 
