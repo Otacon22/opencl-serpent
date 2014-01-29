@@ -215,7 +215,7 @@ void calculate_experiment_parameters(){
 }
 
 void csv_print_experiment_size_parameters(){
-    printf("%u,%u,%u,%u", num_work_items, num_work_items_in_work_group, num_encrypt_blocks_for_work_item, total_blocks_size);
+    printf("%lu,%lu,%lu,%lu", num_work_items, num_work_items_in_work_group, num_encrypt_blocks_for_work_item, total_blocks_size);
 }
 
 void print_experiment_size_parameters(){
@@ -224,11 +224,11 @@ void print_experiment_size_parameters(){
 
         printf("[INFO] Key size: %d bit\n", keyLen);
         printf("[INFO] Block size: %d Byte\n", BLOCK_SIZE_IN_BYTES);
-        printf("[INFO] Number of work-items: %u\n", num_work_items);
-        printf("[INFO] Number of work-items in a work-group: %u\n", num_work_items_in_work_group);
+        printf("[INFO] Number of work-items: %lu\n", num_work_items);
+        printf("[INFO] Number of work-items in a work-group: %lu\n", num_work_items_in_work_group);
         printf("[INFO] Resulting number of work-groups: %.2f\n", ((float) num_work_items)/num_work_items_in_work_group);
-        printf("[INFO] Number of blocks to encrypt for work item: %u\n", num_encrypt_blocks_for_work_item);
-        if (verbose) printf("[INFO] Total number of blocks to encrypt with given parameters: %u blocks\n", num_encrypt_blocks);
+        printf("[INFO] Number of blocks to encrypt for work item: %lu\n", num_encrypt_blocks_for_work_item);
+        if (verbose) printf("[INFO] Total number of blocks to encrypt with given parameters: %lu blocks\n", num_encrypt_blocks);
     }
 }
 
@@ -238,7 +238,7 @@ void check_needed_size(){
     size_t required_on_host = required_on_video_card + (mem_size * 2);
 
     if(verbose){
-        printf("[INFO] Memory required on video card: %u Bytes (%.2f MiB) \n", required_on_video_card, required_on_video_card/1048576.0);
+        printf("[INFO] Memory required on video card: %lu Bytes (%.2f MiB) \n", required_on_video_card, required_on_video_card/1048576.0);
     }
     if (required_on_video_card >= globalMemorySize){
         printf("[ERROR] Requested memory is larger than the avalable memory on the video card!\n");
@@ -246,7 +246,7 @@ void check_needed_size(){
     }
     if(verbose){
         printf("[INFO] Memory occupancy on video card: %.2f %%\n",(((float) required_on_video_card)/(globalMemorySize))*100.0);
-        printf("[INFO] Memory required on the host: %d Bytes (%.2f MiB)\n", required_on_host, required_on_host/1048576.0);
+        printf("[INFO] Memory required on the host: %ld Bytes (%.2f MiB)\n", required_on_host, required_on_host/1048576.0);
     }
 
 }
@@ -338,7 +338,7 @@ void get_and_print_device_info(){
 
     ret = clGetDeviceInfo(device_id, CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(cl_ulong), &globalMemorySize, 0);
     assert(ret == CL_SUCCESS);
-    if (verbose) printf("[INFO] Global Memory size: %lu Bytes\n", (long unsigned int) globalMemorySize);
+    if (verbose) printf("[INFO] Global Memory size: %lu Bytes (%.2f MiB)\n", (long unsigned int) globalMemorySize, ((float) globalMemorySize)/1048576);
 
     ret = clGetDeviceInfo(device_id, CL_DEVICE_GLOBAL_MEM_CACHE_SIZE, sizeof(cl_ulong), &globalCacheSize, 0);
     assert(ret == CL_SUCCESS);
@@ -361,7 +361,7 @@ void get_and_print_device_info(){
     assert(ret == CL_SUCCESS);
     if (verbose) { 
         for(i=0; i<maxWorkItemDim; i++){
-            printf("[INFO] Max number of work items for dimension %d: %u \n", i, maxWorkItem[i]);
+            printf("[INFO] Max number of work items for dimension %ld: %u \n", i, maxWorkItem[i]);
         }
     }
 
@@ -461,7 +461,7 @@ void copy_data_to_opencl_buffers() {
         NULL);
     assert(ret == CL_SUCCESS);
 
-    if(verbose) printf( "[INFO] Copying into memory buffer (plain) - Size: %d Bytes \n", mem_size);
+    if(verbose) printf( "[INFO] Copying into memory buffer (plain) - Size: %lu Bytes \n", mem_size);
     ret = clEnqueueWriteBuffer(
         command_queue,
         memobj1,
@@ -497,7 +497,7 @@ void build_opencl_program(){
         exit(1);
     }
 
-    wrote += sprintf(build_args, "%s -DNUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM=%d", default_build_args,
+    wrote += sprintf(build_args, "%s -DNUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM=%lu", default_build_args,
             num_encrypt_blocks_for_work_item);
 
     if (unroll_main_work_cycle) {
@@ -620,7 +620,7 @@ void save_opencl_binaries() {
     if (i != -1){
         num_instructions = atoi(cmdout);
 
-        if (verbose) {printf("[INFO] Number of instructions of the main loop body: %d\n", num_instructions);}
+        if (verbose) {printf("[INFO] Number of instructions of the main loop body: %lu\n", num_instructions);}
     }
 
 
@@ -783,12 +783,12 @@ void print_performance_time() {
     if (!csv_output){
         printf("[PERF] Execution time: %e seconds\n", executionTime);
 
-        printf("[PERF] Encrypted data: %d Bytes\n", BLOCK_SIZE_IN_BYTES*num_encrypt_blocks);
+        printf("[PERF] Encrypted data: %lu Bytes\n", BLOCK_SIZE_IN_BYTES*num_encrypt_blocks);
     }
 }
 
 void csv_print_performance() {
-    printf(",%.4f,%d,%.4f\n", executionTime, BLOCK_SIZE_IN_BYTES*num_encrypt_blocks, speed);
+    printf(",%.4f,%lu,%.4f\n", executionTime, BLOCK_SIZE_IN_BYTES*num_encrypt_blocks, speed);
 }
 
 void print_instructions_per_byte() {
