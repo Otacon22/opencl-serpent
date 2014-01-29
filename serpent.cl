@@ -643,7 +643,7 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
     //barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
 
     j = kernel_id * 4;
-    for (;i != NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM;){
+    for (;i < NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM;){
 
 #ifdef UNROLL_MAIN_LOOP
         /* Unrolled version of the entire for cycle */       
