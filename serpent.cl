@@ -593,16 +593,13 @@
         x1 = plaintext[j+1];\
         x2 = plaintext[j+2];\
         x3 = plaintext[j+3];\
-        barrier(CLK_LOCAL_MEM_FENCE);\
         round_operations(w,k);\
         gensubkey_operations_unrolled();\
         keying_round_transf(x0,x1,x2,x3,y0,y1,y2,y3,subkeys);\
-        barrier(CLK_LOCAL_MEM_FENCE);\
         plaintext[j] = x0;\
         plaintext[j+1] = x1;\
         plaintext[j+2] = x2;\
         plaintext[j+3] = x3;\
-        barrier(CLK_LOCAL_MEM_FENCE);\
         j += num_work_items*4;\
         i++
 
