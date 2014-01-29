@@ -128,6 +128,9 @@ char **program_binary;
 size_t num_instructions = 0;
 float instructions_per_byte;
 
+int nvidia = 0;
+int ati = 0;
+
 
 void verbose_printf(char *str){
     if(verbose){
@@ -323,8 +326,14 @@ void get_and_print_device_info(){
     assert(ret == CL_SUCCESS);
 
     ret = clGetDeviceInfo(device_id, CL_DEVICE_VENDOR, sizeof(deviceVendor), deviceVendor, 0);    
-    assert(ret == CL_SUCCESS);
+    assert(ret == CL_SUCCESS); 
     if (verbose) printf("[INFO] Device vendor: %s\n", deviceVendor);
+
+    if (strcasestr(deviceVendor,"nvidia") != NULL) {
+        nvidia = 1;
+    } else if (strcasestr(deviceVendor,"advanced micro devices") != NULL) {
+        ati = 1;
+    }
 
     ret = clGetDeviceInfo(device_id, CL_DEVICE_ADDRESS_BITS, sizeof(numberOfBits), &numberOfBits, 0);    
     assert(ret == CL_SUCCESS);
@@ -614,39 +623,40 @@ void save_opencl_binaries() {
         printf("Memory error\n");
         exit(1);
     }
-    
-    sprintf(commandstr, "python -c \"print len(open('%s','r').read().split(' bra')[0].split('BB0_1:')[1].split('\\n'))\" | tr -d '\\n'", binary_dump_file);
-    
-    //if (verbose) {printf("[INFO] Executing command: %s\n", commandstr);}    
+    if (nvidia) {
+        sprintf(commandstr, "python -c \"print len(open('%s','r').read().split(' bra')[0].split('BB0_1:')[1].split('\\n'))\" | tr -d '\\n'", binary_dump_file);
+        
+        //if (verbose) {printf("[INFO] Executing command: %s\n", commandstr);}    
 
-    fd_popen = (FILE *) popen(commandstr,"r");
+        fd_popen = (FILE *) popen(commandstr,"r");
 
-    if ((cmdout = malloc(sizeof(char)*200)) == NULL){ //TODO change 200 to define value
-        printf("Memory error\n");
-        exit(1);
-    }
-
-    written = fread(cmdout, sizeof(char), 200, fd_popen); //TODO
-    cmdout[written] = '\0';
-
-    pclose(fd_popen);
-
-    for(i=0; cmdout[i] != '\0'; i++){
-        if (!(cmdout[i]>='0' && cmdout[i]<='9')){
-            verbose_printf("[SOFT-ERROR] It's not possibile to establish the number of instructions for this card!\n");
-            i=-1;
-            num_instructions = 0;
-            break;
+        if ((cmdout = malloc(sizeof(char)*200)) == NULL){ //TODO change 200 to define value
+            printf("Memory error\n");
+            exit(1);
         }
+
+        written = fread(cmdout, sizeof(char), 200, fd_popen); //TODO
+        cmdout[written] = '\0';
+
+        pclose(fd_popen);
+
+        for(i=0; cmdout[i] != '\0'; i++){
+            if (!(cmdout[i]>='0' && cmdout[i]<='9')){
+                verbose_printf("[SOFT-ERROR] It's not possibile to establish the number of instructions for this card!\n");
+                i=-1;
+                num_instructions = 0;
+                break;
+            }
+        }
+
+
+        if (i != -1){
+            num_instructions = atoi(cmdout);
+
+            if (verbose) {printf("[INFO] Number of instructions of the main loop body: %lu\n", num_instructions);}
+        }
+
     }
-
-
-    if (i != -1){
-        num_instructions = atoi(cmdout);
-
-        if (verbose) {printf("[INFO] Number of instructions of the main loop body: %lu\n", num_instructions);}
-    }
-
 
 }
 
