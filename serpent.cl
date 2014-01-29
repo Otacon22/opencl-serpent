@@ -624,7 +624,10 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
     __private uint32_t y0, y1, y2, y3;
     __private uint32_t k[132];
     __private uint32_t subkeys[33][4];
-    __private int i=0, j=0, u=0;
+    __private int i=0, j=0;
+#ifndef UNROLL_GENSUBKEY
+    __private int u=0;
+#endif
 
     __private uint32_t w[132];
 
