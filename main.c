@@ -361,7 +361,7 @@ void get_and_print_device_info(){
     assert(ret == CL_SUCCESS);
     if (verbose) { 
         for(i=0; i<maxWorkItemDim; i++){
-            printf("[INFO] Max number of work items for dimension %ld: %u \n", i, maxWorkItem[i]);
+            printf("[INFO] Max number of work items for dimension %d: %lu \n", i, maxWorkItem[i]);
         }
     }
 
