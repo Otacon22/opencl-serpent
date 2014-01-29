@@ -110,6 +110,7 @@ size_t local_work_size;
 int unroll_main_work_cycle;
 int unroll_subkey_operation;
 int counter_mode;
+uint32_t iv[4];
 
 uint32_t keyLen = 128;
 
@@ -518,7 +519,8 @@ void build_opencl_program(){
     }
 
     if (counter_mode) {
-        wrote += sprintf(build_args+wrote, " -DCTR_MODE");
+        wrote += sprintf(build_args+wrote, " -DCTR_MODE -DIV_0=%d -DIV_1=%d -DIV_2=%d -DIV_3=%d",
+                         iv[0], iv[1], iv[2], iv[3]);
     }
 
     
