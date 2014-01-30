@@ -593,8 +593,6 @@
         x1 = plaintext[j+1];\
         x2 = plaintext[j+2];\
         x3 = plaintext[j+3];\
-        round_operations(w,k);\
-        gensubkey_operations_unrolled();\
         keying_round_transf(x0,x1,x2,x3,y0,y1,y2,y3,subkeys);\
         plaintext[j] = x0;\
         plaintext[j+1] = x1;\
@@ -613,35 +611,43 @@
 typedef unsigned int    uint32_t;
 typedef unsigned long   uint64_t;
 
-__kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintext)
+__kernel void serpent_encrypt(__global uint32_t *k, __global uint32_t *plaintext)
 {
     /* Stuff used by function for encryption functions. */
     __private uint32_t t01, t02, t03, t04, t05, t06, t07, t08, t09, t10, t11, t12, t13, t14, t15, t16, t17, t18;
     __private uint32_t x0, x1, x2, x3; 
     __private uint32_t y0, y1, y2, y3;
-    __private uint32_t k[132];
+//    __private uint32_t k[132];
     __private uint32_t subkeys[33][4];
     __private int i=0, j=0;
 #ifndef UNROLL_GENSUBKEY
     __private int u=0;
 #endif
+#ifdef CTR_MODE
+    __private int t;
+    __private uint64_t word0, word1;
+#endif
 
-    __private uint32_t w[132];
 
     size_t num_work_items = get_global_size(0); // get number of work items for dimension 1
     size_t kernel_id = get_global_id(0); // get work item id
     
 
-
-    /* Copying pre-processed key from global to local
+    /* Copying pre-processed key from global to local, directly into subkeys array.
         We copy the pre-processed key from the global memory.
-        It's a long operation but it's done just one by each work item
+        It's a quite long operation but it's done just one by each work item
      */
-    copy_pre_processed_key(w,_w);  //unrolled version
-    //for (u=0; u<132; u++){ w[u] = _w[u];}    //loop version
+    //Read k, write subkeys
+#ifdef UNROLL_GENSUBKEY
+    gensubkey_operations_unrolled();      // Unrolled version
+#else
+    for (u=0; u<=32; u++){ GENSUBKEY(u);}   // Loop version
+#endif
 
-    //barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
 
+    /*  - Main loop -
+     * Take a block, encrypt, choose the next one and so on
+     */
     j = kernel_id * 4;
     for (;i < NUM_ENCRYPT_BLOCKS_FOR_WORK_ITEM;){
 
@@ -652,6 +658,12 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
 
     #ifdef CTR_MODE
         //Given j, the 128-bit block number is j/4
+
+        t = (word0+1) || (word1+1);
+        word0 = word0 * t;
+        word1 = word1 * t;
+        word0 = !(word1+1) * t;
+        word1 = word1 + t;
         /*
             x0 = 0;
             x1 = 0;
@@ -666,21 +678,10 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
         x2 = plaintext[j+2];
         x3 = plaintext[j+3];
     
-        //barrier(CLK_LOCAL_MEM_FENCE); //Needed?
     #endif
         /* Doing the actual work */
-        round_operations(w,k);                                //Read only w, write k.
-
-        //Read k, write subkeys
-#ifdef UNROLL_GENSUBKEY
-        gensubkey_operations_unrolled();      // Unrolled version
-#else
-        for (u=0; u<=32; u++){ GENSUBKEY(u);}   // Loop version
-#endif
-
         keying_round_transf(x0,x1,x2,x3,y0,y1,y2,y3,subkeys); //Read subkeys, write others
 
-        //barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
       
     #ifdef CTR_MODE
         plaintext[j]   = x0 ^ plaintext[j];
@@ -696,8 +697,6 @@ __kernel void serpent_encrypt(__global uint32_t *_w, __global uint32_t *plaintex
         plaintext[j+3] = x3;
     #endif
 
-        //barrier(CLK_LOCAL_MEM_FENCE);   //Needed? Quite sure...
-        
         j += num_work_items*4;
 
         i++;
