@@ -10,7 +10,7 @@ for workitems in [256,512,1024,2048,4096,8192, 16384, 32768, 65536, 131072, 2621
             for x in range(3): # For getting mean values
                 print "Executing: "+str(workitems)+","+str(loops)
                 cmd = "./main -c -w "+str(workitems)+" -b "+str(loops)+" -g "+str(wgsize)
-                out = os.popen(cmd).read().split("\n")[1]
+                out = os.popen(cmd).read().split("\n")[-1]
                 if len(out.split(","))==8:
                     fd.write(out+"|"+cmd+"\n")
                 fd.flush()
