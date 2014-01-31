@@ -659,17 +659,20 @@ __kernel void serpent_encrypt(__global uint32_t *k, __global uint32_t *plaintext
     #ifdef CTR_MODE
         //Given j, the 128-bit block number is j/4
 
-        t = (word0+1) || (word1+1);
+        word0 = IV0;
+        word1 = IV1;
+
+        t = (word1+(j/4) > word1) || (word0+1) ; 
         word0 = word0 * t;
         word1 = word1 * t;
-        word0 = !(word1+1) * t;
-        word1 = word1 + t;
-        /*
-            x0 = 0;
-            x1 = 0;
-            x2 = 0;
-            x3 = j/4;
-        */
+
+        word0 += (word1+(j/4) < word1) * t;
+        word1 += t*(j/4);
+
+        x0 = word0 >> 32;
+        x1 = (uint32_t) (word0 & 0x00000000FFFFFFFF);
+        x2 = word1 >> 32;
+        x3 = (uint32_t) (word1 & 0x00000000FFFFFFFF);
 
     #else
         /* Copying plaintext from global to private */

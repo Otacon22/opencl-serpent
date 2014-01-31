@@ -9,6 +9,7 @@
 #include <CL/cl.h>
 #include <stdint.h>
 #include <getopt.h>
+#include <inttypes.h>
 
 
 #define MAX_SOURCE_SIZE (0x100000)
@@ -67,7 +68,7 @@ static const struct option long_options[] = {
     { "ctr-mode", no_argument, NULL, 'r'},
     { 0, 0, 0, 0 }
 };
-char *args_string = "hvcw:b:d:g:us";
+char *args_string = "hvcw:b:d:g:usr";
 int option_index = 0;
 
 float speed;
@@ -110,7 +111,7 @@ size_t local_work_size;
 int unroll_main_work_cycle;
 int unroll_subkey_operation;
 int counter_mode;
-uint32_t iv[4];
+uint64_t iv[2];
 
 uint32_t keyLen = 128;
 
@@ -209,6 +210,28 @@ void experiment_size_default_declarations(){
     unroll_main_work_cycle = 0;
     unroll_subkey_operation = 1;
     counter_mode = 0;
+}
+
+void counter_iv_initalize() {
+    unsigned char random;
+    int i,j;
+    if (counter_mode) {
+        /*Initialize IV with random values*/
+        for (i=0; i<2; i++){
+            random = (rand() & 0xff);
+            iv[i]  = random;
+            for (j=8; j<=56; j+=8) {
+                random = (rand() & 0xff);
+                iv[i] |= random << j;
+            }
+        }
+
+        if(verbose) {
+            printf("\n---------------- IVs settings ----------------\n\n");
+            printf("[INFO] Generated 64-bit IVs: %"  PRIu64 " and %"  PRIu64 " \n", iv[0], iv[1]);
+        }
+
+    }
 }
 
 void calculate_experiment_parameters(){
@@ -771,8 +794,8 @@ void build_opencl_program(){
     }
 
     if (counter_mode) {
-        wrote += sprintf(build_args+wrote, " -DCTR_MODE -DIV_0=%d -DIV_1=%d -DIV_2=%d -DIV_3=%d",
-                         iv[0], iv[1], iv[2], iv[3]);
+        wrote += sprintf(build_args+wrote, " -DCTR_MODE -DIV0=%" PRIu64 " -DIV1=%" PRIu64 " ",
+                         iv[0], iv[1]);
     }
 
     
@@ -1105,6 +1128,8 @@ int main(int argc, char **argv){
 
     parse_arguments(argc, argv);
 
+    counter_iv_initalize();
+
     calculate_experiment_parameters();
 
     if (csv_output) csv_header_print();
@@ -1168,24 +1193,24 @@ int main(int argc, char **argv){
     copy_results_from_opencl_buffer();
     cipher = plain; //We write the output again in the same array used for the plaintext
                     // (the size is the same). This assignement is just to be clear in next instructions
-
-    if(memcmp(cipher, correct, BLOCK_SIZE_IN_BYTES*num_encrypt_blocks) == 0)
-        verbose_printf("\n[SUCCESS] Output ciphertext is correct!\n\n");
-    else {
-        /* Check if ciphertext is correct */
-        for(k=0; k<(num_encrypt_blocks); k++){
-            if(!(memcmp(
-                    &(cipher[k*BLOCK_SIZE_IN_32BIT_WORDS]),
-                    &(correct[k*BLOCK_SIZE_IN_32BIT_WORDS]),
-                    BLOCK_SIZE_IN_BYTES
-                    ) == 0)){
-                printf("\n[ERROR] Output ciphertext is not correct! (block number %d, couting from 0)\n\n", k);
-                exit(1); 
+    if (!counter_mode) {
+        if(memcmp(cipher, correct, BLOCK_SIZE_IN_BYTES*num_encrypt_blocks) == 0)
+            verbose_printf("\n[SUCCESS] Output ciphertext is correct!\n\n");
+        else {
+            /* Check if ciphertext is correct */
+            for(k=0; k<(num_encrypt_blocks); k++){
+                if(!(memcmp(
+                        &(cipher[k*BLOCK_SIZE_IN_32BIT_WORDS]),
+                        &(correct[k*BLOCK_SIZE_IN_32BIT_WORDS]),
+                        BLOCK_SIZE_IN_BYTES
+                        ) == 0)){
+                    printf("\n[ERROR] Output ciphertext is not correct! (block number %d, couting from 0)\n\n", k);
+                    exit(1); 
+                }
             }
+            printf("[CHECK] Strange behaviour detected. Check me\n");
         }
-        printf("[CHECK] Strange behaviour detected. Check me\n");
     }
-
 
 
     get_opencl_performance_time();
